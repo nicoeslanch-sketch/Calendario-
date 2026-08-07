@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDR Planner — Gestión Comercial Santa Clara</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────
+   TOKENS
+   ───────────────────────────────────────────── */
+:root{
+  --ink:#10201A;
+  --pine:#1D4739;
+  --pine-2:#2C5F4C;
+  --lichen:#E9ECE5;
+  --surface:#FFFFFF;
+  --surface-2:#F5F7F2;
+  --line:#D4DBD1;
+  --line-soft:#E4E9E0;
+  --muted:#6B7A70;
+
+  --go:#2F8659;
+  --warn:#C9902A;
+  --stop:#BE4034;
+
+  --t-radio:#3E6B8C;
+  --t-marcacion:#6B5B95;
+  --t-comite:#2F8659;
+  --t-pago:#C4762C;
+  --t-ranking:#2A7B86;
+  --t-cierre:#BE4034;
+  --t-prep:#C9902A;
+  --t-otro:#8A948C;
+
+  --r:10px;
+  --shadow:0 1px 2px rgba(16,32,26,.06), 0 8px 24px -18px rgba(16,32,26,.35);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--lichen);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+h1,h2,h3,h4{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:700;letter-spacing:-.02em}
+.mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+
+/* ─────────────────────────────────────────────
+   TOPBAR
+   ───────────────────────────────────────────── */
+.topbar{
+  background:var(--pine);
+  color:#EDF2EC;
+  padding:0 22px;
+  display:flex;align-items:center;gap:22px;
+  height:60px;
+  position:sticky;top:0;z-index:40;
+}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand .mark{
+  font-family:"Bricolage Grotesque",sans-serif;
+  font-weight:800;font-size:19px;letter-spacing:-.03em;color:#fff;
+}
+.brand .sub{
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:#93B3A3;font-weight:600;
+}
+.topbar .spacer{flex:1}
+.today-stamp{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;
+  color:#A8C4B5;letter-spacing:.04em;
+}
+.seg{
+  display:flex;background:rgba(255,255,255,.10);
+  border-radius:8px;padding:3px;gap:2px;
+}
+.seg button{
+  padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;
+  color:#B9D0C3;transition:.15s;
+}
+.seg button:hover{color:#fff}
+.seg button[aria-pressed="true"]{background:#fff;color:var(--pine)}
+
+/* ─────────────────────────────────────────────
+   TABS
+   ───────────────────────────────────────────── */
+.tabs{
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:0 22px;display:flex;gap:2px;
+  position:sticky;top:60px;z-index:35;
+  overflow-x:auto;
+}
+.tabs button{
+  padding:14px 16px 12px;font-size:12px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  border-bottom:2px solid transparent;white-space:nowrap;
+}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--pine);border-bottom-color:var(--pine)}
+.tabs .count{
+  display:inline-block;margin-left:7px;background:var(--stop);color:#fff;
+  font-size:10px;padding:1px 6px;border-radius:20px;letter-spacing:0;
+}
+
+main{padding:22px;max-width:1240px;margin:0 auto}
+.view{display:none}
+.view.on{display:block}
+
+/* ─────────────────────────────────────────────
+   PIEZAS COMUNES
+   ───────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--line-soft);
+  border-radius:var(--r);box-shadow:var(--shadow);
+}
+.card-h{
+  padding:13px 16px;border-bottom:1px solid var(--line-soft);
+  display:flex;align-items:center;gap:10px;
+}
+.card-h h3{font-size:14px}
+.card-h .note{font-size:11.5px;color:var(--muted);margin-left:auto}
+
+.eyebrow{
+  font-size:10.5px;font-weight:700;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--muted);
+}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--muted);
+}
+.pill.go{color:var(--go);border-color:#B7DCC6;background:#EDF7F1}
+.pill.warn{color:#8F6512;border-color:#EBD79E;background:#FCF6E6}
+.pill.stop{color:var(--stop);border-color:#E9B9B4;background:#FBEDEB}
+
+/* meter */
+.meter{height:6px;background:var(--line-soft);border-radius:6px;overflow:hidden}
+.meter i{display:block;height:100%;border-radius:6px;transition:width .35s ease}
+
+/* ─────────────────────────────────────────────
+   HOY
+   ───────────────────────────────────────────── */
+.hoy-top{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-bottom:16px}
+.hero{
+  background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:20px 22px;
+}
+.hero h1{font-size:30px;line-height:1.05;margin-bottom:3px}
+.hero .date-mono{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.tallies{display:flex;gap:26px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line-soft)}
+.tally .n{font-family:"Bricolage Grotesque",sans-serif;font-size:26px;font-weight:800;line-height:1}
+.tally .l{font-size:11px;color:var(--muted);margin-top:2px}
+
+.timeline{padding:6px 0}
+.slot{
+  display:grid;grid-template-columns:58px 1fr auto;gap:14px;
+  padding:12px 16px;border-bottom:1px solid var(--line-soft);align-items:start;
+}
+.slot:last-child{border-bottom:0}
+.slot .hr{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);padding-top:1px}
+.slot .ttl{font-weight:600;display:flex;align-items:center;gap:8px}
+.slot .meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.slot.done .ttl{color:var(--muted);text-decoration:line-through}
+
+/* alertas */
+.alerts{display:flex;flex-direction:column}
+.alert{
+  display:flex;gap:11px;padding:12px 16px;border-bottom:1px solid var(--line-soft);
+  font-size:13px;align-items:flex-start;
+}
+.alert:last-child{border-bottom:0}
+.alert .bar{width:3px;border-radius:3px;align-self:stretch;flex:none}
+.alert b{font-weight:600}
+.alert small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+
+/* ─────────────────────────────────────────────
+   SEMANA
+   ───────────────────────────────────────────── */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.wday{
+  background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:12px;display:flex;flex-direction:column;gap:9px;min-height:190px;
+}
+.wday.is-today{border-color:var(--pine);box-shadow:0 0 0 2px rgba(29,71,57,.13),var(--shadow)}
+.wday.weekend{background:var(--surface-2)}
+.wday .dname{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.wday .dnum{font-family:"Bricolage Grotesque",sans-serif;font-size:22px;font-weight:800;line-height:1}
+.wday ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.wday li{font-size:11.5px;display:flex;gap:6px;align-items:flex-start;line-height:1.3}
+.wday li .dot{margin-top:4px}
+.load-tag{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+
+/* ─────────────────────────────────────────────
+   MES — perfil de carga (elemento firma)
+   ───────────────────────────────────────────── */
+.profile{padding:18px 16px 12px}
+.profile-bars{display:flex;align-items:flex-end;gap:3px;height:96px}
+.pb{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;cursor:pointer;position:relative}
+.pb i{display:block;width:100%;border-radius:3px 3px 0 0;transition:.2s;min-height:3px}
+.pb:hover i{filter:brightness(1.15)}
+.pb.sel i{outline:2px solid var(--ink);outline-offset:1px}
+.profile-axis{display:flex;gap:3px;margin-top:7px;border-top:1px solid var(--line);padding-top:6px}
+.profile-axis span{flex:1;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:9.5px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;padding:12px 16px;border-top:1px solid var(--line-soft)}
+.legend span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+
+.month-wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:16px;align-items:start}
+.grid-head,.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.grid-head div{
+  padding:9px 6px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;text-align:center;
+}
+.grid{gap:1px;background:var(--line-soft);border-top:1px solid var(--line-soft)}
+.cell{background:var(--surface);min-height:96px;padding:7px 8px 8px;cursor:pointer;position:relative;transition:.12s}
+.cell:hover{background:var(--surface-2)}
+.cell.out{background:#F0F2ED;cursor:default}
+.cell.out .cnum{color:#B4BFB6}
+.cell.sel{box-shadow:inset 0 0 0 2px var(--pine)}
+.cell.wknd{background:#F7F9F5}
+.cell .cnum{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:600;color:var(--muted)}
+.cell.is-today .cnum{background:var(--pine);color:#fff;border-radius:4px;padding:1px 5px}
+.cell .chips{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.chip{
+  font-size:10px;padding:2px 5px;border-radius:4px;color:#fff;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cell .loadbar{position:absolute;left:0;top:0;bottom:0;width:3px}
+
+.daypanel{position:sticky;top:132px}
+.daypanel .body{padding:14px 16px}
+.daypanel h4{font-size:16px;margin-bottom:2px}
+.ev{border-top:1px solid var(--line-soft);padding:12px 0}
+.ev:first-of-type{border-top:0;padding-top:4px}
+.ev .top{display:flex;align-items:center;gap:8px}
+.ev .top b{font-size:13px}
+.ev .who{font-size:11px;color:var(--muted);margin-left:auto}
+.checks{list-style:none;margin:9px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.checks li{display:flex;gap:8px;align-items:center;font-size:12px;padding:3px 0}
+.checks input{accent-color:var(--pine);width:14px;height:14px;cursor:pointer;flex:none}
+.checks li.ok label{color:var(--muted);text-decoration:line-through}
+.checks label{cursor:pointer}
+
+/* ─────────────────────────────────────────────
+   RANKINGS / ACTIVACIONES
+   ───────────────────────────────────────────── */
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rank{padding:16px}
+.rank h3{font-size:15px;margin-bottom:3px}
+.rank .upd{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.rank .foot{display:flex;align-items:center;gap:10px;margin-top:13px}
+.btn{
+  border:1px solid var(--line);background:var(--surface-2);
+  padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;transition:.15s;
+}
+.btn:hover{background:var(--pine);color:#fff;border-color:var(--pine)}
+.act{padding:16px}
+.act .blk{margin-top:14px}
+.act .blk-h{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:6px}
+.act .blk-h span{color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:11px}
+
+.hint{
+  margin-top:16px;font-size:12px;color:var(--muted);
+  border-left:2px solid var(--line);padding-left:12px;
+}
+
+@media (max-width:1080px){
+  .hoy-top,.month-wrap,.cols3,.cols2{grid-template-columns:1fr}
+  .week{grid-template-columns:repeat(2,1fr)}
+  .daypanel{position:static}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+:focus-visible{outline:2px solid var(--pine);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">PDR Planner</span>
+    <span class="sub">Canal Santa Clara</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" id="segPersona" role="group" aria-label="Vista por persona">
+    <button data-p="all" aria-pressed="true">General</button>
+    <button data-p="nico" aria-pressed="false">Nicolás</button>
+    <button data-p="juan" aria-pressed="false">Juan</button>
+  </div>
+  <div class="today-stamp" id="stamp"></div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-v="hoy">Hoy</button>
+  <button role="tab" aria-selected="false" data-v="semana">Semana</button>
+  <button role="tab" aria-selected="false" data-v="mes">Mes</button>
+  <button role="tab" aria-selected="false" data-v="rankings">Rankings</button>
+  <button role="tab" aria-selected="false" data-v="activaciones">Activaciones</button>
+</nav>
+
+<main>
+  <!-- HOY -->
+  <section class="view on" id="v-hoy">
+    <div class="hoy-top">
+      <div class="hero">
+        <div class="date-mono" id="heroEyebrow"></div>
+        <h1 id="heroTitle"></h1>
+        <p style="color:var(--muted);font-size:13px;margin:6px 0 0" id="heroLine"></p>
+        <div class="tallies" id="tallies"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Avisos</h3><span class="note">Se ordenan por urgencia</span></div>
+        <div class="alerts" id="alerts"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Plan del día</h3><span class="note" id="planNote"></span></div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <p class="hint">La preparación se genera sola: cada hito crea sus tareas previas en los días hábiles anteriores. Si la fecha cae sábado o domingo, se adelanta al viernes.</p>
+  </section>
+
+  <!-- SEMANA -->
+  <section class="view" id="v-semana">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h"><h3>Recomendación de planificación</h3></div>
+      <div style="padding:14px 16px;font-size:13px" id="weekAdvice"></div>
+    </div>
+    <div class="week" id="week"></div>
+  </section>
+
+  <!-- MES -->
+  <section class="view" id="v-mes">
+    <div class="card">
+      <div class="card-h">
+        <h3>Perfil de carga — Agosto 2026</h3>
+        <span class="note">Cada barra es un día. La altura es la carga estimada.</span>
+      </div>
+      <div class="profile">
+        <div class="profile-bars" id="profileBars"></div>
+        <div class="profile-axis" id="profileAxis"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="month-wrap">
+      <div class="card" style="overflow:hidden">
+        <div class="grid-head">
+          <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="card daypanel">
+        <div class="card-h"><h3>Detalle del día</h3></div>
+        <div class="body" id="dayPanel"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RANKINGS -->
+  <section class="view" id="v-rankings">
+    <div class="cols3" id="rankGrid"></div>
+    <p class="hint">Cada tarjeta guarda su última actualización. El calendario lee ese estado: si un ranking lleva días sin tocarse, aparece como aviso en Hoy.</p>
+  </section>
+
+  <!-- ACTIVACIONES -->
+  <section class="view" id="v-activaciones">
+    <div class="cols2" id="actGrid"></div>
+    <p class="hint">Una activación queda lista para ejecutar solo cuando sus tres bloques están al 100%. Mientras falte algo, el semáforo se mantiene en preparación.</p>
+  </section>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════
+   1. CONFIGURACIÓN
+   ═══════════════════════════════════════════════ */
+const HOY = new Date(2026, 7, 7);          // viernes 7 de agosto de 2026
+const YEAR = 2026, MONTH = 7;              // 7 = agosto
+
+const TIPOS = {
+  radio:      {label:'Radio / Activación',      color:'var(--t-radio)'},
+  marcacion:  {label:'Marcación',               color:'var(--t-marcacion)'},
+  comite:     {label:'Comité / Reunión',        color:'var(--t-comite)'},
+  pago:       {label:'Pagos / Nóminas',         color:'var(--t-pago)'},
+  ranking:    {label:'Rankings / Categorización',color:'var(--t-ranking)'},
+  cierre:     {label:'Cierres y fechas límite', color:'var(--t-cierre)'},
+  prep:       {label:'Preparación previa',      color:'var(--t-prep)'},
+  otro:       {label:'Otras actividades',       color:'var(--t-otro)'}
+};
+
+const PERSONAS = {nico:'Nicolás', juan:'Juan', ambos:'Nicolás y Juan'};
+
+/* Reglas de eventos que se repiten. dow: 1=lun … 7=dom */
+const RECURRENTES = [
+  {id:'prod',   dow:[1],   hora:'09:00', tipo:'otro',      peso:6,
+   titulo:'Revisar producción del fin de semana', quien:'nico'},
+  {id:'nomina', dow:[1],   hora:'10:00', tipo:'pago',      peso:20, prep:2,
+   titulo:'Nómina de carreras', quien:'nico',
+   tareas:['Actualizar base de canto','Revisar ejecutivos vigentes','Validar riesgo bajo 30%','Validar ventas emitidas','Revisar SMAD','Generar nómina']},
+  {id:'radio',  dow:[1,3], hora:'11:30', tipo:'radio',     peso:22, prep:2,
+   titulo:'Radio Pide', quien:'nico',
+   tareas:['Actualizar producción','Actualizar ranking','Preparar contenido','Confirmar premios','Revisar guion']},
+  {id:'catsen', dow:[1],   hora:'14:00', tipo:'ranking',   peso:12,
+   titulo:'Actualizar Categorización y Senior', quien:'juan',
+   tareas:['Cruzar base TRIO','Sumar cinerario y SSFF','Descontar anulaciones','Verificar tramo SMAD']},
+  {id:'marc',   dow:[2,4], hora:'09:30', tipo:'marcacion', peso:14,
+   titulo:'Marcación', quien:'juan'},
+  {id:'comite', dow:[3],   hora:'15:00', tipo:'comite',    peso:16, prep:1,
+   titulo:'Comité de Coordinación Comercial', quien:'ambos',
+   tareas:['Consolidar ventas por equipo','Preparar avance de rankings','Revisar cero ventas y fuentes']},
+  {id:'reunion',dow:[5],   hora:'12:00', tipo:'comite',    peso:8,
+   titulo:'Reunión Nicolás — Juan', quien:'ambos',
+   tareas:['Revisar semana','Repartir tareas de la semana siguiente']},
+  {id:'rend',   dow:[5],   hora:'16:00', tipo:'otro',      peso:8,
+   titulo:'Rendiciones y caja chica', quien:'juan'}
+];
+
+/* Hitos puntuales de agosto 2026 */
+const ESPECIALES = [
+  {dia:3,  hora:'08:30', tipo:'otro',    peso:6,  titulo:'Inicio turnos Chicureo y Mall', quien:'juan'},
+  {dia:10, hora:'11:30', tipo:'radio',   peso:30, prep:3, reemplaza:'radio',
+   titulo:'Radio Cierre Julio', quien:'nico', activacion:'cierre-julio',
+   tareas:['Cerrar producción mensual','Cerrar ranking mensual','Cerrar ranking líderes','Confirmar premios','Preparar guion']},
+  {dia:11, hora:'11:00', tipo:'otro',    peso:16, prep:2,
+   titulo:'Capacitación Presupuesto 2027', quien:'ambos',
+   tareas:['Preparar presentación','Confirmar sala y asistentes']},
+  {dia:12, hora:'17:00', tipo:'comite',  peso:14,
+   titulo:'Comité Santa Clara', quien:'ambos'},
+  {dia:14, hora:'09:00', tipo:'cierre',  peso:18,
+   titulo:'Fotografía de riesgo día 14', quien:'nico',
+   tareas:['Descargar foto de riesgo','Marcar ejecutivos sobre 30%','Avisar a jefes de venta']},
+  {dia:21, hora:'08:00', tipo:'otro',    peso:20, prep:3,
+   titulo:'Paseo Senior', quien:'ambos',
+   tareas:['Confirmar nómina de asistentes','Cerrar transporte','Rendir gastos previos']},
+  {dia:23, hora:'23:59', tipo:'cierre',  peso:22,
+   titulo:'Cierre de categorización (24 → 23)', quien:'nico',
+   tareas:['Congelar venta neta emitida','Descontar anulaciones','Validar antigüedad Senior']},
+  {dia:24, hora:'09:00', tipo:'ranking', peso:8,
+   titulo:'Inicia periodo de categorización de septiembre', quien:'juan'},
+  {dia:26, hora:'10:00', tipo:'pago',    peso:26, prep:3,
+   titulo:'Pago de categorización', quien:'nico',
+   tareas:['Cruzar riesgo del día 14','Validar SMAD por tramo','Revisar plazo de emisión','Enviar nómina a pago']},
+  {dia:29, hora:'10:00', tipo:'otro',    peso:12,
+   titulo:'Activación Mall Chicureo', quien:'juan'}
+];
+
+/* ═══════════════════════════════════════════════
+   2. GENERACIÓN DEL MES
+   ═══════════════════════════════════════════════ */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const dow = d => d.getDay() === 0 ? 7 : d.getDay();          // 1..7
+const esFinde = d => dow(d) >= 6;
+const DIAS_MES = new Date(YEAR, MONTH+1, 0).getDate();
+const NOM_DIA = ['','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+const NOM_DIA_C = ['','Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+let eventos = [];   // {fecha, hora, tipo, titulo, quien, peso, tareas:[{t,ok}], prepDe}
+
+function nuevoEvento(o){
+  eventos.push({
+    uid: 'e' + eventos.length,
+    fecha: o.fecha, hora: o.hora, tipo: o.tipo, titulo: o.titulo,
+    quien: o.quien, peso: o.peso, activacion: o.activacion || null,
+    prepDe: o.prepDe || null,
+    tareas: (o.tareas || []).map((t,i) => ({t, ok: o.preHechas ? i < o.preHechas : false}))
+  });
+}
+
+/* Un día antes en días hábiles: si cae sábado o domingo, se adelanta al viernes */
+function habilAntes(fecha, dias){
+  const d = new Date(fecha);
+  d.setDate(d.getDate() - dias);
+  while (esFinde(d)) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function construir(){
+  eventos = [];
+  const bloqueados = new Set();      // fecha+idRegla que un especial reemplaza
+  ESPECIALES.forEach(e => { if (e.reemplaza) bloqueados.add(`${e.dia}|${e.reemplaza}`); });
+
+  // recurrentes
+  for (let dia = 1; dia <= DIAS_MES; dia++){
+    const f = new Date(YEAR, MONTH, dia);
+    RECURRENTES.forEach(r => {
+      if (!r.dow.includes(dow(f))) return;
+      if (bloqueados.has(`${dia}|${r.id}`)) return;
+      nuevoEvento({fecha:iso(f), hora:r.hora, tipo:r.tipo, titulo:r.titulo,
+                   quien:r.quien, peso:r.peso, tareas:r.tareas,
+                   preHechas: dia < HOY.getDate() ? 99 : (dia === HOY.getDate() ? 2 : 0)});
+      if (r.prep) crearPrep(f, r);
+    });
+  }
+  // especiales
+  ESPECIALES.forEach(e => {
+    const f = new Date(YEAR, MONTH, e.dia);
+    nuevoEvento({fecha:iso(f), hora:e.hora, tipo:e.tipo, titulo:e.titulo, quien:e.quien,
+                 peso:e.peso, tareas:e.tareas, activacion:e.activacion,
+                 preHechas: e.dia < HOY.getDate() ? 99 : (e.dia === HOY.getDate() ? 2 : 0)});
+    if (e.prep) crearPrep(f, e);
+  });
+
+  eventos.sort((a,b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+}
+
+function crearPrep(fechaEvento, regla){
+  const p = habilAntes(fechaEvento, regla.prep);
+  if (p.getMonth() !== MONTH) return;
+  const tareas = (regla.tareas || []).slice(0, 4).map(t => `${t} — para ${regla.titulo}`);
+  if (!tareas.length) return;
+  nuevoEvento({
+    fecha: iso(p), hora:'—', tipo:'prep', peso: Math.round(regla.peso * 0.4),
+    titulo: `Preparar: ${regla.titulo}`, quien: regla.quien,
+    tareas, prepDe: regla.titulo,
+    preHechas: p.getDate() < HOY.getDate() ? 99 : (p.getDate() === HOY.getDate() ? 2 : 0)
+  });
+}
+
+construir();
+
+/* ═══════════════════════════════════════════════
+   3. ESTADO Y CÁLCULOS
+   ═══════════════════════════════════════════════ */
+let persona = 'all';
+let diaSel  = iso(HOY);
+
+const visibles = () => persona === 'all'
+  ? eventos
+  : eventos.filter(e => e.quien === persona || e.quien === 'ambos');
+
+const delDia = f => visibles().filter(e => e.fecha === f);
+
+function carga(f){
+  const t = delDia(f).reduce((s,e) => s + e.peso, 0);
+  return Math.min(100, Math.round(t * 1.15));
+}
+function nivel(c){
+  if (c >= 70) return {k:'alta',  color:'var(--stop)', label:'Carga alta'};
+  if (c >= 40) return {k:'media', color:'var(--warn)', label:'Carga media'};
+  if (c > 0)   return {k:'baja',  color:'var(--go)',   label:'Carga baja'};
+  return {k:'libre', color:'var(--line)', label:'Sin actividades'};
+}
+const prog = e => !e.tareas.length ? 1 : e.tareas.filter(t => t.ok).length / e.tareas.length;
+const pend = f => delDia(f).reduce((s,e) => s + e.tareas.filter(t => !t.ok).length, 0);
+
+function semaforo(e){
+  const p = prog(e);
+  if (p === 1) return 'go';
+  const dif = (new Date(e.fecha) - HOY) / 86400000;
+  if (dif <= 1) return 'stop';
+  return 'warn';
+}
+
+/* ═══════════════════════════════════════════════
+   4. RENDER
+   ═══════════════════════════════════════════════ */
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+function pintarTodo(){ pintarHoy(); pintarSemana(); pintarMes(); pintarRankings(); pintarActivaciones(); }
+
+/* ── HOY ───────────────────────────────────── */
+function pintarHoy(){
+  const f = iso(HOY), evs = delDia(f);
+  const c = carga(f), n = nivel(c);
+
+  $('#stamp').textContent = `${NOM_DIA[dow(HOY)]} ${HOY.getDate()} agosto 2026`.toLowerCase();
+  $('#heroEyebrow').textContent = `${NOM_DIA[dow(HOY)]} · ${HOY.getDate()} de agosto`;
+  $('#heroTitle').textContent = n.label;
+  $('#heroLine').textContent = evs.length
+    ? `${evs.length} actividades y ${pend(f)} tareas pendientes para cerrar el día.`
+    : 'No hay actividades cargadas para hoy.';
+
+  const listas = evs.filter(e => prog(e) === 1).length;
+  const criticas = evs.filter(e => semaforo(e) === 'stop').length;
+  $('#tallies').innerHTML = [
+    ['Prioritarias', criticas, 'var(--stop)'],
+    ['En preparación', evs.length - listas - criticas, 'var(--warn)'],
+    ['Listas', listas, 'var(--go)']
+  ].map(([l,v,c]) => `<div class="tally"><div class="n" style="color:${c}">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  // timeline
+  $('#planNote').textContent = `${c}% de carga estimada`;
+  $('#timeline').innerHTML = evs.length ? evs.map(e => {
+    const p = Math.round(prog(e) * 100), s = semaforo(e);
+    return `<div class="slot ${p===100?'done':''}">
+      <div class="hr">${e.hora}</div>
+      <div>
+        <div class="ttl"><span class="dot" style="background:${TIPOS[e.tipo].color}"></span>${e.titulo}</div>
+        <div class="meta">${PERSONAS[e.quien]} · ${e.tareas.length ? `${e.tareas.filter(t=>t.ok).length} de ${e.tareas.length} tareas` : 'sin checklist'}</div>
+      </div>
+      <div style="text-align:right;min-width:96px">
+        <span class="pill ${s}">${p===100?'Lista':p+'%'}</span>
+        <div class="meter" style="margin-top:7px"><i style="width:${p}%;background:${p===100?'var(--go)':TIPOS[e.tipo].color}"></i></div>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:26px 16px;color:var(--muted)">Nada agendado. Buen momento para adelantar la semana siguiente.</div>`;
+
+  // avisos
+  const av = [];
+  const man = new Date(HOY); man.setDate(man.getDate()+1);
+  while (esFinde(man)) man.setDate(man.getDate()+1);
+  delDia(iso(man)).forEach(e => {
+    if (prog(e) < 1) av.push(['stop', `${e.titulo} es el ${NOM_DIA[dow(man)].toLowerCase()} ${man.getDate()}`,
+      `Faltan ${e.tareas.filter(t=>!t.ok).length} tareas. Responsable: ${PERSONAS[e.quien]}.`]);
+  });
+  evs.filter(e => e.tipo === 'prep' && prog(e) < 1).forEach(e =>
+    av.push(['warn', e.titulo.replace('Preparar: ','Queda pendiente preparar '),
+      'Se agendó hoy justamente para que el día del hito no se haga corriendo.']));
+  const sig = [1,2,3].map(i => {const d = new Date(HOY); d.setDate(d.getDate()+i+2); return d;})
+    .filter(d => d.getMonth() === MONTH && carga(iso(d)) >= 70);
+  if (sig.length >= 2) av.push(['warn', 'La semana entrante parte cargada',
+    `${sig.map(d => NOM_DIA_C[dow(d)]+' '+d.getDate()).join(', ')} superan el 70%. Conviene adelantar nómina y rankings hoy.`]);
+  if (!av.length) av.push(['go','Todo al día','No hay tareas críticas pendientes.']);
+
+  $('#alerts').innerHTML = av.slice(0,5).map(([k,t,s]) =>
+    `<div class="alert"><span class="bar" style="background:var(--${k})"></span>
+      <div><b>${t}</b><small>${s}</small></div></div>`).join('');
+}
+
+/* ── SEMANA ────────────────────────────────── */
+function pintarSemana(){
+  const ini = new Date(HOY); ini.setDate(ini.getDate() - (dow(HOY)-1));
+  const dias = [...Array(7)].map((_,i) => {const d = new Date(ini); d.setDate(d.getDate()+i); return d;});
+
+  const altas = dias.filter(d => carga(iso(d)) >= 70);
+  $('#weekAdvice').innerHTML = altas.length
+    ? `<b>${altas.map(d => NOM_DIA[dow(d)].toLowerCase()+' '+d.getDate()).join(', ')}</b> concentran la carga de la semana.
+       Deja lista la nómina, los rankings y el contenido de Radio el día hábil anterior; si esos días se hacen sobre la marcha, se cae la preparación de lo siguiente.`
+    : `Semana pareja. Es el momento de adelantar lo del cierre de categorización.`;
+
+  $('#week').innerHTML = dias.map(d => {
+    const f = iso(d), c = carga(f), n = nivel(c), evs = delDia(f);
+    return `<div class="wday ${f===iso(HOY)?'is-today':''} ${esFinde(d)?'weekend':''}">
+      <div>
+        <div class="dname">${NOM_DIA_C[dow(d)]}</div>
+        <div class="dnum">${d.getDate()}</div>
+      </div>
+      <div>
+        <div class="load-tag" style="color:${n.color}">${c}% ${n.k}</div>
+        <div class="meter" style="margin-top:4px"><i style="width:${c}%;background:${n.color}"></i></div>
+      </div>
+      <ul>${evs.slice(0,5).map(e => `<li><span class="dot" style="background:${TIPOS[e.tipo].color}"></span>${e.titulo}</li>`).join('')
+        || '<li style="color:var(--muted)">Sin actividades</li>'}</ul>
+    </div>`;
+  }).join('');
+}
+
+/* ── MES ───────────────────────────────────── */
+function pintarMes(){
+  // perfil de carga (elemento firma)
+  const bars = [], axis = [];
+  for (let dia = 1; dia <= DIAS_MES; dia++){
+    const d = new Date(YEAR, MONTH, dia), f = iso(d), c = carga(f), n = nivel(c);
+    bars.push(`<button class="pb ${f===diaSel?'sel':''}" data-f="${f}" title="${NOM_DIA[dow(d)]} ${dia} · ${c}%">
+        <i style="height:${Math.max(4,c)}%;background:${esFinde(d) ? n.color+'55' : n.color}"></i></button>`);
+    axis.push(`<span>${dia % 7 === 1 || dia === 1 ? dia : ''}</span>`);
+  }
+  $('#profileBars').innerHTML = bars.join('');
+  $('#profileAxis').innerHTML = axis.join('');
+  $$('.pb').forEach(b => b.onclick = () => { diaSel = b.dataset.f; pintarMes(); });
+
+  $('#legend').innerHTML = Object.values(TIPOS)
+    .map(t => `<span><i class="dot" style="background:${t.color}"></i>${t.label}</span>`).join('');
+
+  // grilla
+  const primero = new Date(YEAR, MONTH, 1);
+  const huecos = dow(primero) - 1;
+  let html = '';
+  for (let i = 0; i < huecos; i++) html += `<div class="cell out"></div>`;
+  for (let dia = 1; dia <= DIAS_MES; dia++){
+    const d = new Date(YEAR, MONTH, dia), f = iso(d), c = carga(f), n = nivel(c), evs = delDia(f);
+    html += `<div class="cell ${f===diaSel?'sel':''} ${f===iso(HOY)?'is-today':''} ${esFinde(d)?'wknd':''}" data-f="${f}">
+      <div class="loadbar" style="background:${c?n.color:'transparent'}"></div>
+      <div class="cnum">${dia}</div>
+      <div class="chips">
+        ${evs.slice(0,3).map(e => `<span class="chip" style="background:${TIPOS[e.tipo].color}">${e.titulo}</span>`).join('')}
+        ${evs.length > 3 ? `<span style="font-size:10px;color:var(--muted)">+${evs.length-3} más</span>` : ''}
+      </div>
+    </div>`;
+  }
+  const resto = (7 - ((huecos + DIAS_MES) % 7)) % 7;
+  for (let i = 0; i < resto; i++) html += `<div class="cell out"></div>`;
+  $('#grid').innerHTML = html;
+  $$('.cell[data-f]').forEach(c => c.onclick = () => { diaSel = c.dataset.f; pintarMes(); });
+
+  pintarPanelDia();
+}
+
+function pintarPanelDia(){
+  const d = new Date(diaSel + 'T00:00:00'), evs = delDia(diaSel), c = carga(diaSel), n = nivel(c);
+  $('#dayPanel').innerHTML = `
+    <h4>${NOM_DIA[dow(d)]} ${d.getDate()} de agosto</h4>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${c}% · ${n.label}</div>
+    <div class="meter" style="margin-bottom:14px"><i style="width:${c}%;background:${n.color}"></i></div>
+    ${evs.length ? evs.map(e => `
+      <div class="ev">
+        <div class="top">
+          <span class="dot" style="background:${TIPOS[e.tipo].color}"></span>
+          <b>${e.titulo}</b>
+          <span class="who">${e.hora !== '—' ? e.hora + ' · ' : ''}${PERSONAS[e.quien]}</span>
+        </div>
+        ${e.tareas.length ? `<ul class="checks">${e.tareas.map((t,i) => `
+          <li class="${t.ok?'ok':''}">
+            <input type="checkbox" id="${e.uid}-${i}" data-e="${e.uid}" data-i="${i}" ${t.ok?'checked':''}>
+            <label for="${e.uid}-${i}">${t.t}</label>
+          </li>`).join('')}</ul>` : ''}
+      </div>`).join('')
+    : `<div style="color:var(--muted);padding:10px 0">Sin actividades. Día disponible para adelantar trabajo.</div>`}`;
+
+  $$('#dayPanel input').forEach(inp => inp.onchange = () => {
+    const ev = eventos.find(e => e.uid === inp.dataset.e);
+    ev.tareas[+inp.dataset.i].ok = inp.checked;
+    pintarTodo();
+  });
+}
+
+/* ── RANKINGS ──────────────────────────────── */
+const RANKINGS = [
+  {n:'Ranking Ejecutivo', d:'Mes comercial de agosto', act:'hoy 09:42', est:'go',  txt:'Actualizado', pct:100, quien:'nico'},
+  {n:'Categorización',    d:'Periodo 24 jul — 23 ago', act:'6 de agosto', est:'warn', txt:'Actualizar hoy', pct:70, quien:'juan'},
+  {n:'Senior',            d:'Trimestre en curso',      act:'6 de agosto', est:'go',  txt:'Actualizado', pct:100, quien:'juan'},
+  {n:'Carrera Líderes',   d:'Cierre julio',            act:'7 de agosto', est:'stop',txt:'Falta validar producción', pct:45, quien:'nico'},
+  {n:'Carreras semanales',d:'Semana 32',               act:'hoy 08:10',  est:'go',  txt:'Actualizado', pct:100, quien:'nico'},
+  {n:'Parquelandia',      d:'Próximo cierre: diciembre',act:'—',         est:'',    txt:'Sin movimiento', pct:15, quien:'juan'}
+];
+function pintarRankings(){
+  const l = persona === 'all' ? RANKINGS : RANKINGS.filter(r => r.quien === persona);
+  $('#rankGrid').innerHTML = l.map(r => `
+    <div class="card rank">
+      <h3>${r.n}</h3>
+      <div class="upd">${r.d}</div>
+      <div class="meter"><i style="width:${r.pct}%;background:${r.est==='stop'?'var(--stop)':r.est==='warn'?'var(--warn)':r.est==='go'?'var(--go)':'var(--line)'}"></i></div>
+      <div class="foot">
+        <span class="pill ${r.est}">${r.txt}</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">Últ. ${r.act}</span>
+      </div>
+      <button class="btn" style="margin-top:12px;width:100%">Actualizar ranking</button>
+    </div>`).join('');
+}
+
+/* ── ACTIVACIONES ──────────────────────────── */
+const ACTIVACIONES = [
+  {n:'Radio Cierre Julio', f:'Lunes 10 de agosto', quien:'nico', bloques:[
+    {t:'Producción', items:[['Producción actualizada',1],['Ranking mensual',1],['Ranking líderes',1],['UF verificadas',1]]},
+    {t:'Contenido',  items:[['15.º lugar',1],['10.º lugar',1],['Top 5',1],['3.er lugar',1],['2.º lugar',1],['1.er lugar',0],['Mensaje final',0]]},
+    {t:'Premios',    items:[['Premio 3.er lugar',1],['Premio 2.º lugar',1],['Premio 1.er lugar',0]]}
+  ]},
+  {n:'Paseo Senior', f:'Viernes 21 de agosto', quien:'ambos', bloques:[
+    {t:'Nómina',    items:[['Ejecutivos con 10 meses',1],['Validar tramo Senior',1],['Confirmar asistentes',0]]},
+    {t:'Logística', items:[['Transporte',1],['Alimentación',0],['Punto de encuentro',0]]},
+    {t:'Gastos',    items:[['Presupuesto aprobado',1],['Rendición previa',0]]}
+  ]}
+];
+function pintarActivaciones(){
+  const l = persona === 'all' ? ACTIVACIONES : ACTIVACIONES.filter(a => a.quien === persona || a.quien === 'ambos');
+  $('#actGrid').innerHTML = l.length ? l.map(a => {
+    const all = a.bloques.flatMap(b => b.items);
+    const p = Math.round(all.filter(i => i[1]).length / all.length * 100);
+    const est = p === 100 ? ['go','Lista para ejecutar'] : p >= 60 ? ['warn','En preparación'] : ['stop','Preparación atrasada'];
+    return `<div class="card act">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div><h3 style="font-size:16px">${a.n}</h3>
+          <div style="font-size:11.5px;color:var(--muted)">${a.f} · ${PERSONAS[a.quien]}</div></div>
+        <span class="pill ${est[0]}" style="margin-left:auto">${est[1]}</span>
+      </div>
+      ${a.bloques.map(b => {
+        const bp = Math.round(b.items.filter(i => i[1]).length / b.items.length * 100);
+        return `<div class="blk">
+          <div class="blk-h"><span>${b.t}</span><span>${bp}%</span></div>
+          <div class="meter"><i style="width:${bp}%;background:${bp===100?'var(--go)':'var(--warn)'}"></i></div>
+          <ul class="checks" style="margin-top:7px">
+            ${b.items.map(i => `<li class="${i[1]?'ok':''}"><input type="checkbox" ${i[1]?'checked':''} disabled><label>${i[0]}</label></li>`).join('')}
+          </ul></div>`;
+      }).join('')}
+    </div>`;
+  }).join('') : `<div class="card" style="padding:26px;color:var(--muted)">No hay activaciones asignadas a esta persona.</div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   5. NAVEGACIÓN
+   ═══════════════════════════════════════════════ */
+$$('.tabs button').forEach(b => b.onclick = () => {
+  $$('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  $$('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+});
+$$('#segPersona button').forEach(b => b.onclick = () => {
+  persona = b.dataset.p;
+  $$('#segPersona button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  pintarTodo();
+});
+
+pintarTodo();
+</script>
+</body>
+</html>
