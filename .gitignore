@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 .vercel/
+.vite/
 .supabase/
 *.log
 .DS_Store
