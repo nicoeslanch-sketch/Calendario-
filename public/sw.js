@@ -1,4 +1,4 @@
-const CACHE = 'pdr-planner-v1';
+const CACHE = 'pdr-planner-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -26,22 +26,21 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: data.tag || `pdr-${Date.now()}`,
-    renotify: false,
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
     data: { url: data.url || '/', taskId: data.taskId },
     actions: [
-      { action: 'open', title: 'Abrir tarea' },
-      { action: 'snooze-10', title: 'En 10 min' }
+      { action: 'accept', title: 'Aceptar' },
+      { action: 'open', title: 'Ir al calendario' }
     ]
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  if (event.action === 'accept') return;
   const url = new URL(event.notification.data?.url || '/', self.location.origin);
-  if (event.action === 'snooze-10') {
-    url.searchParams.set('snooze', '10');
-    if (event.notification.data?.taskId) url.searchParams.set('task', event.notification.data.taskId);
-  }
   event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
     const existing = windows.find((client) => 'focus' in client);
     return existing ? existing.focus().then((client) => client.navigate(url.href)) : clients.openWindow(url.href);

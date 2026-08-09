@@ -25,4 +25,9 @@ describe('deadlines', () => {
     expect(deadlineState({ date: '2026-08-09', deadline_time: '12:00:00', completed: false, reminder_minutes_before: 60 }, new Date('2026-08-09T17:00:00Z'))).toBe('overdue');
     expect(deadlineState({ date: '2026-08-09', deadline_time: '12:00', completed: true }, new Date())).toBe('completed');
   });
+
+  it('uses the earliest scheduled point when a task has multiple reminders', () => {
+    const task = { date: '2026-08-09', deadline_time: '14:00', completed: false, reminder_minutes: [10, 60] };
+    expect(deadlineState(task, new Date('2026-08-09T17:30:00Z'))).toBe('urgent');
+  });
 });

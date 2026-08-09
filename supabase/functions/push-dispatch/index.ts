@@ -22,12 +22,12 @@ type Candidate = {
 function payload(candidate: Candidate) {
   const deadline = candidate.deadline_time?.slice(0, 5);
   if (candidate.kind === 'overdue') {
-    return { title: '🔴 Tarea vencida', body: `${candidate.task_title} alcanzó su hora límite${deadline ? ` (${deadline})` : ''}.`, tag: `overdue-${candidate.task_id}`, taskId: candidate.task_id, url: `/?task=${candidate.task_id}` };
+    return { title: '🔴 Tarea vencida', body: `${candidate.task_title} alcanzó su hora límite${deadline ? ` (${deadline})` : ''}.`, tag: `overdue-${candidate.task_id}-${candidate.scheduled_for}`, taskId: candidate.task_id, url: `/?task=${candidate.task_id}` };
   }
   if (candidate.kind === 'snooze') {
     return { title: 'PDR Planner · Recordatorio', body: `${candidate.task_title}${deadline ? ` · Hora límite ${deadline}` : ''}.`, tag: `snooze-${candidate.task_id}-${candidate.scheduled_for}`, taskId: candidate.task_id, url: `/?task=${candidate.task_id}` };
   }
-  return { title: 'PDR Planner', body: `Se acerca el plazo de ${candidate.task_title}.${deadline ? ` Hora límite: ${deadline}.` : ''}`, tag: `reminder-${candidate.task_id}`, taskId: candidate.task_id, url: `/?task=${candidate.task_id}` };
+  return { title: 'PDR Planner · Próximo vencimiento', body: `${candidate.task_title}.${deadline ? ` Hora límite: ${deadline}.` : ''}`, tag: `reminder-${candidate.task_id}-${candidate.scheduled_for}`, taskId: candidate.task_id, url: `/?task=${candidate.task_id}` };
 }
 
 export default {
@@ -50,7 +50,7 @@ export default {
       if (claim.error) return { status: 'duplicate' };
 
       try {
-        await webpush.sendNotification({ endpoint: candidate.endpoint, keys: { p256dh: candidate.p256dh, auth: candidate.auth } }, JSON.stringify(payload(candidate)), { TTL: 3600, urgency: candidate.kind === 'overdue' ? 'high' : 'normal' });
+        await webpush.sendNotification({ endpoint: candidate.endpoint, keys: { p256dh: candidate.p256dh, auth: candidate.auth } }, JSON.stringify(payload(candidate)), { TTL: 3600, urgency: 'high' });
         await supabase.from('notification_log').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', claim.data.id);
         return { status: 'sent' };
       } catch (sendError) {

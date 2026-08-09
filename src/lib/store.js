@@ -29,13 +29,20 @@ function uuid() {
 }
 
 function normalizeTask(task) {
-  return {
+  const legacyReminder = Number(task.reminder_minutes_before ?? 60);
+  const reminderMinutes = Array.isArray(task.reminder_minutes)
+    ? [...new Set(task.reminder_minutes.map(Number).filter((minutes) => minutes > 0))].sort((a, b) => b - a)
+    : legacyReminder > 0 ? [legacyReminder] : [];
+  const normalized = {
     description: '', start_time: null, deadline_time: null, responsible: 'ambos',
     priority: 'media', category: 'otro', completed: false, completed_at: null,
-    reminder_minutes_before: 60, recurrence_rule: { frequency: 'none' },
+    reminder_minutes_before: 60, reminder_minutes: [60], recurrence_rule: { frequency: 'none' },
     notify_target: 'responsable', estimated_minutes: 30, preparation_business_days: 0,
     position: 0, metadata: {}, subtasks: [], ...task,
   };
+  normalized.reminder_minutes_before = reminderMinutes.length ? Math.max(...reminderMinutes) : 0;
+  normalized.reminder_minutes = reminderMinutes;
+  return normalized;
 }
 
 export function backendMode() {

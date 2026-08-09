@@ -104,8 +104,11 @@ export function deadlineState(task, now = new Date()) {
   if (task.completed || !task.deadline_time) return task.completed ? 'completed' : 'pending';
   const deadline = chileDateTime(task.date, task.deadline_time);
   const minutes = Math.round((deadline - now) / 60000);
+  const reminderThreshold = Array.isArray(task.reminder_minutes) && task.reminder_minutes.length
+    ? Math.max(...task.reminder_minutes.map(Number))
+    : (task.reminder_minutes_before ?? 60);
   if (minutes < 0) return 'overdue';
-  if (minutes <= (task.reminder_minutes_before ?? 60)) return 'urgent';
+  if (minutes <= reminderThreshold) return 'urgent';
   return 'pending';
 }
 

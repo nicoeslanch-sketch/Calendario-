@@ -184,6 +184,13 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
 .modal-actions .push-right { margin-left: auto; }
 .weekdays { display: flex; flex-wrap: wrap; gap: 5px; }
 .weekdays label { padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 10px; }
+.reminder-choices { display: flex; flex-wrap: wrap; gap: 7px; }
+.reminder-choices label { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 11px; cursor: pointer; }
+.reminder-choices input { width: auto; min-height: auto; margin-right: 3px; accent-color: var(--pine); }
+.field-help { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.notification-health { margin-bottom: 14px; padding: 11px 12px; display: flex; flex-direction: column; gap: 3px; border-left: 3px solid var(--go); border-radius: 8px; background: #f0f7f2; font-size: 12px; }
+.notification-health span { color: var(--muted); font-size: 11px; }
+.notification-help { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: #fff8e5; color: #71500c; font-size: 11px; line-height: 1.5; }
 .snooze { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
 .snooze p { margin-bottom: 7px; color: var(--muted); font-size: 11px; }
 .snooze .button { margin-right: 4px; }

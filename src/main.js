@@ -9,7 +9,10 @@ import {
   patchTask, saveBirthday, saveTask, snoozeTask, subscribeRealtime,
   toggleSubtask, toggleTask,
 } from './lib/store.js';
-import { currentSubscription, disablePush, enablePush, registerServiceWorker } from './lib/push.js';
+import {
+  currentSubscription, disablePush, enablePush, pushStatus as getPushStatus,
+  registerServiceWorker, showTestNotification,
+} from './lib/push.js';
 
 const app = document.querySelector('#app');
 const PERSON = { nicolas: 'Nicolás', benjamin: 'Benjamín', ambos: 'Los dos' };
@@ -23,6 +26,10 @@ const CATEGORY = {
   otro: ['Otro', '#718077'],
 };
 const PRIORITY_WEIGHT = { baja: 12, media: 20, alta: 28, urgente: 38 };
+const REMINDER_CHOICES = [
+  [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min'],
+  [60, '1 hora'], [120, '2 horas'], [1440, '1 día'], [2880, '2 días'], [10080, '1 semana'],
+];
 
 const state = {
   view: 'today',
@@ -36,6 +43,7 @@ const state = {
   modal: null,
   loading: true,
   pushEnabled: false,
+  notificationStatus: null,
 };
 
 let realtimeTimer;
@@ -299,6 +307,17 @@ function reminderOptions(selected = 60) {
   return [[0, 'Sin aviso'], [10, '10 min antes'], [30, '30 min antes'], [60, '1 hora antes'], [120, '2 horas antes'], [1440, '1 día antes']].map(([value, label]) => `<option value="${value}" ${Number(selected) === value ? 'selected' : ''}>${label}</option>`).join('');
 }
 
+function taskReminderMinutes(task = {}) {
+  if (Array.isArray(task.reminder_minutes)) return task.reminder_minutes.map(Number);
+  const legacy = Number(task.reminder_minutes_before ?? 60);
+  return legacy > 0 ? [legacy] : [];
+}
+
+function reminderCheckboxes(task) {
+  const selected = taskReminderMinutes(task);
+  return REMINDER_CHOICES.map(([value, label]) => `<label><input type="checkbox" name="reminder_minutes" value="${value}" ${selected.includes(value) ? 'checked' : ''}> ${label} antes</label>`).join('');
+}
+
 function renderModal() {
   if (!state.modal) return '';
   if (state.modal.type === 'notifications') return notificationModal();
@@ -320,7 +339,7 @@ function taskModal(task = {}) {
       <div class="field"><label>Fecha</label><input name="date" type="date" required value="${task.date || state.selectedDate || chileToday()}"></div>
       <div class="field"><label>Hora de inicio</label><input name="start_time" type="time" value="${task.start_time?.slice(0, 5) || ''}"></div>
       <div class="field"><label>Hora límite</label><input name="deadline_time" type="time" value="${task.deadline_time?.slice(0, 5) || ''}"></div>
-      <div class="field"><label>Recordatorio</label><select name="reminder_minutes_before">${reminderOptions(task.reminder_minutes_before)}</select></div>
+      <div class="field wide"><label>Avisos programados</label><div class="reminder-choices">${reminderCheckboxes(task)}</div><small class="field-help">Puedes marcar varios. Si no marcas ninguno, la tarea no enviará avisos previos.</small></div>
       <div class="field"><label>Prioridad</label><select name="priority">${['baja', 'media', 'alta', 'urgente'].map((value) => `<option ${task.priority === value ? 'selected' : ''}>${value}</option>`).join('')}</select></div>
       <div class="field"><label>Categoría</label><select name="category">${Object.entries(CATEGORY).map(([value, [label]]) => `<option value="${value}" ${task.category === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
       <div class="field"><label>Duración estimada</label><select name="estimated_minutes">${[15, 30, 45, 60, 90, 120].map((value) => `<option value="${value}" ${Number(task.estimated_minutes || 30) === value ? 'selected' : ''}>${value} minutos</option>`).join('')}</select></div>
@@ -338,7 +357,9 @@ function subtaskInput(subtask = {}) {
 }
 
 function notificationModal() {
-  return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Avisos de este dispositivo</h2><button class="modal-close" data-close-modal>×</button></div><form id="notification-form"><div class="modal-body"><p style="margin-bottom:14px;color:var(--muted)">Los avisos Web Push pueden llegar con PDR Planner cerrado. Asocia este dispositivo a la persona correcta.</p><div class="form-grid"><div class="field"><label>Dispositivo</label><input name="device_name" required maxlength="100" value="${escapeHTML(navigator.platform || 'Mi dispositivo')}"></div><div class="field"><label>Asociar a</label><select name="person">${personOptions(state.person)}</select></div></div></div><div class="modal-actions">${state.pushEnabled ? '<button class="button danger" type="button" data-action="disable-notifications">Desactivar avisos</button>' : ''}<button class="button push-right" type="button" data-close-modal>Cancelar</button><button class="button primary" type="submit">${state.pushEnabled ? 'Actualizar dispositivo' : 'Activar avisos'}</button></div></form></section></div>`;
+  const status = state.notificationStatus;
+  const permissionLabel = status?.permission === 'granted' ? 'Permiso concedido' : status?.permission === 'denied' ? 'Permiso bloqueado' : 'Permiso pendiente';
+  return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Avisos de este dispositivo</h2><button class="modal-close" data-close-modal>×</button></div><form id="notification-form"><div class="modal-body"><p style="margin-bottom:14px;color:var(--muted)">Los avisos Web Push pueden llegar sin la pestaña abierta. Chrome debe poder ejecutarse en segundo plano y Windows debe permitir sus banners.</p><div class="notification-health"><b>${state.pushEnabled ? 'Dispositivo registrado' : 'Dispositivo sin registrar'}</b><span>${escapeHTML(permissionLabel)} · Zona horaria America/Santiago</span></div><div class="form-grid"><div class="field"><label>Dispositivo</label><input name="device_name" required maxlength="100" value="${escapeHTML(navigator.platform || 'Mi dispositivo')}"></div><div class="field"><label>Asociar a</label><select name="person">${personOptions(state.person)}</select></div></div><div class="notification-help"><b>Si no aparece el cuadro de prueba:</b> abre Configuración de Windows → Sistema → Notificaciones, activa Chrome y “Mostrar banners”, y desactiva “No molestar”.</div></div><div class="modal-actions">${state.pushEnabled ? '<button class="button danger" type="button" data-action="disable-notifications">Desactivar avisos</button><button class="button" type="button" data-action="test-notification">Probar aviso ahora</button>' : ''}<button class="button push-right" type="button" data-close-modal>Cerrar</button><button class="button primary" type="submit">${state.pushEnabled ? 'Actualizar dispositivo' : 'Activar avisos'}</button></div></form></section></div>`;
 }
 
 function birthdayModal(birthday) {
@@ -349,6 +370,7 @@ function birthdayModal(birthday) {
 function taskFromForm(form) {
   const data = new FormData(form);
   const recurrence = data.get('recurrence');
+  const reminderMinutes = [...new Set(data.getAll('reminder_minutes').map(Number).filter((minutes) => minutes > 0))].sort((a, b) => b - a);
   const weekdays = [...form.querySelectorAll('[name="weekday"]:checked')].map((input) => Number(input.value));
   const subtasks = [...form.querySelectorAll('.subtask-input')].map((row) => ({ id: row.querySelector('.subtask-check').dataset.subtaskId || undefined, completed: row.querySelector('.subtask-check').checked, title: row.querySelector('.subtask-title').value.trim() })).filter((item) => item.title);
   return {
@@ -356,7 +378,8 @@ function taskFromForm(form) {
     responsible: data.get('responsible'), notify_target: data.get('notify_target'),
     date: data.get('date'), start_time: data.get('start_time') || null,
     deadline_time: data.get('deadline_time') || null, priority: data.get('priority'),
-    category: data.get('category'), reminder_minutes_before: Number(data.get('reminder_minutes_before')),
+    category: data.get('category'), reminder_minutes: reminderMinutes,
+    reminder_minutes_before: reminderMinutes.length ? Math.max(...reminderMinutes) : 0,
     estimated_minutes: Number(data.get('estimated_minutes')), preparation_business_days: Number(data.get('preparation_business_days')),
     recurrence_rule: { frequency: recurrence, weekdays: recurrence === 'weekly' ? weekdays : [] }, subtasks,
   };
@@ -396,7 +419,11 @@ document.addEventListener('click', (event) => {
 });
 
 function handleAction(action, element) {
-  if (action === 'notifications') { state.modal = { type: 'notifications' }; render(); }
+  if (action === 'notifications') {
+    state.modal = { type: 'notifications' };
+    getPushStatus().then((status) => { state.notificationStatus = status; render(); });
+    render();
+  }
   if (action === 'new-task') { state.modal = { type: 'task', task: { date: element.dataset.date || state.selectedDate } }; render(); }
   if (action === 'add-subtask') document.querySelector('#subtasks').insertAdjacentHTML('beforeend', subtaskInput());
   if (action === 'today') { state.cursor = chileToday(); state.selectedDate = chileToday(); refresh(); }
@@ -407,6 +434,10 @@ function handleAction(action, element) {
     refresh();
   }
   if (action === 'disable-notifications') withBusy(element, async () => { await disablePush(); state.pushEnabled = false; state.modal = null; toast('Avisos desactivados'); render(); });
+  if (action === 'test-notification') withBusy(element, async () => {
+    await showTestNotification();
+    toast('Aviso de prueba enviado', 'Debe aparecer como un cuadro de Windows.');
+  });
 }
 
 document.addEventListener('submit', (event) => {
@@ -421,7 +452,8 @@ document.addEventListener('submit', (event) => {
 function submitQuick(form) {
   const data = new FormData(form);
   withBusy(form.querySelector('button[type="submit"]'), async () => {
-    await saveTask({ title: data.get('title').trim(), date: data.get('date'), deadline_time: data.get('deadline_time') || null, responsible: data.get('responsible'), reminder_minutes_before: Number(data.get('reminder_minutes_before')), priority: 'alta', category: 'deadline', recurrence_rule: { frequency: 'none' }, subtasks: [] });
+    const reminder = Number(data.get('reminder_minutes_before'));
+    await saveTask({ title: data.get('title').trim(), date: data.get('date'), deadline_time: data.get('deadline_time') || null, responsible: data.get('responsible'), reminder_minutes: reminder > 0 ? [reminder] : [], reminder_minutes_before: reminder, priority: 'alta', category: 'deadline', recurrence_rule: { frequency: 'none' }, subtasks: [] });
     form.reset(); toast('Tarea creada', 'Ya está disponible para ambos dispositivos.'); await refresh({ quiet: true });
   });
 }
@@ -443,7 +475,14 @@ function submitBirthdayEdit(form) {
 
 function submitNotifications(form) {
   const data = new FormData(form);
-  withBusy(form.querySelector('button[type="submit"]'), async () => { await enablePush(data.get('person'), data.get('device_name').trim()); state.pushEnabled = true; state.modal = null; toast('Avisos activados', 'Este dispositivo quedó registrado.'); render(); });
+  withBusy(form.querySelector('button[type="submit"]'), async () => {
+    await enablePush(data.get('person'), data.get('device_name').trim());
+    state.pushEnabled = true;
+    state.notificationStatus = await getPushStatus();
+    await showTestNotification();
+    toast('Avisos activados', 'Enviamos un cuadro de prueba a este dispositivo.');
+    render();
+  });
 }
 
 async function removeTask(id, button) {
@@ -485,6 +524,7 @@ async function initialize() {
   try {
     await registerServiceWorker();
     state.pushEnabled = Boolean(await currentSubscription());
+    state.notificationStatus = await getPushStatus();
   } catch (error) { console.warn('Service Worker no disponible:', error); }
   subscribeRealtime(() => {
     clearTimeout(realtimeTimer);
