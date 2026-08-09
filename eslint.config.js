@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/**', 'supabase/functions/**'] },
+  { ignores: ['dist/**', '.vite/**', 'supabase/functions/**'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js', 'tests/**/*.js'],
