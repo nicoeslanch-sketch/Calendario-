@@ -1,0 +1,5 @@
+project_id = "pdr-planner"
+
+[functions.push-dispatch]
+verify_jwt = true
+
