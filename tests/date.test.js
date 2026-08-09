@@ -22,6 +22,7 @@ describe('calendar dates', () => {
 describe('deadlines', () => {
   it('classifies overdue and completed tasks', () => {
     expect(deadlineState({ date: '2026-08-09', deadline_time: '12:00', completed: false, reminder_minutes_before: 60 }, new Date('2026-08-09T17:00:00Z'))).toBe('overdue');
+    expect(deadlineState({ date: '2026-08-09', deadline_time: '12:00:00', completed: false, reminder_minutes_before: 60 }, new Date('2026-08-09T17:00:00Z'))).toBe('overdue');
     expect(deadlineState({ date: '2026-08-09', deadline_time: '12:00', completed: true }, new Date())).toBe('completed');
   });
 });

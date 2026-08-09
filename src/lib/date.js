@@ -87,15 +87,17 @@ export function formatShortDay(iso) {
 
 export function chileDateTime(iso, time) {
   if (!iso || !time) return null;
+  const normalizedTime = String(time).match(/^\d{2}:\d{2}/)?.[0];
+  if (!normalizedTime) return null;
   // noon-based offset lookup avoids device timezone assumptions around DST.
-  const base = new Date(`${iso}T${time}:00Z`);
+  const base = new Date(`${iso}T${normalizedTime}:00Z`);
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TIME_ZONE,
     timeZoneName: 'longOffset',
     hour: '2-digit',
   }).formatToParts(base);
   const offset = parts.find((part) => part.type === 'timeZoneName')?.value.replace('GMT', '') || '-04:00';
-  return new Date(`${iso}T${time}:00${offset}`);
+  return new Date(`${iso}T${normalizedTime}:00${offset}`);
 }
 
 export function deadlineState(task, now = new Date()) {
