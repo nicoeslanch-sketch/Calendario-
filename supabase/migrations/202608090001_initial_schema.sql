@@ -121,7 +121,7 @@ create trigger subscriptions_touch_updated_at before update on public.notificati
 create or replace function public.remember_deleted_occurrence()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  if old.recurrence_source_id is not null and old.recurrence_date is not null then
+  if pg_trigger_depth() = 1 and old.recurrence_source_id is not null and old.recurrence_date is not null then
     insert into public.recurrence_exclusions(source_id, occurrence_date)
     values (old.recurrence_source_id, old.recurrence_date)
     on conflict do nothing;
