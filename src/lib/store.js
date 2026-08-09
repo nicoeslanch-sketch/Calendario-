@@ -206,7 +206,14 @@ export async function saveSubscription(subscription, person, deviceName) {
     writeLocal();
     return;
   }
-  const { error } = await supabase.from('notification_subscriptions').upsert(payload, { onConflict: 'endpoint' });
+  const { error } = await supabase.rpc('register_notification_subscription', {
+    p_endpoint: payload.endpoint,
+    p_p256dh: payload.p256dh,
+    p_auth: payload.auth,
+    p_device_name: payload.device_name,
+    p_person: payload.person,
+    p_user_agent: payload.user_agent,
+  });
   if (error) throw error;
 }
 
@@ -217,13 +224,13 @@ export async function disableSubscription(endpoint) {
     writeLocal();
     return;
   }
-  const { error } = await supabase.from('notification_subscriptions').update({ active: false }).eq('endpoint', endpoint);
+  const { error } = await supabase.rpc('disable_notification_subscription', { p_endpoint: endpoint });
   if (error) throw error;
 }
 
 export async function snoozeTask(taskId, minutes) {
   if (!supabase) return;
-  const { error } = await supabase.from('reminder_snoozes').insert({ task_id: taskId, scheduled_for: new Date(Date.now() + minutes * 60000).toISOString() });
+  const { error } = await supabase.rpc('schedule_task_snooze', { p_task_id: taskId, p_minutes: minutes });
   if (error) throw error;
 }
 

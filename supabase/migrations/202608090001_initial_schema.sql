@@ -130,6 +130,7 @@ begin
 end;
 $$;
 create trigger tasks_remember_deleted_occurrence before delete on public.tasks for each row execute function public.remember_deleted_occurrence();
+revoke execute on function public.remember_deleted_occurrence() from public;
 
 create or replace function public.previous_business_date(p_date date, p_days integer)
 returns date language plpgsql immutable set search_path = '' as $$
@@ -179,6 +180,7 @@ begin
 end;
 $$;
 create trigger tasks_sync_preparation after insert or update of title, date, responsible, notify_target, priority, preparation_business_days on public.tasks for each row execute function public.sync_preparation_task();
+revoke execute on function public.sync_preparation_task() from public;
 
 create or replace function public.materialize_recurring_tasks(p_start date, p_end date)
 returns integer language plpgsql security definer set search_path = public, pg_temp as $$
@@ -251,16 +253,14 @@ alter table public.reminder_snoozes enable row level security;
 create policy tasks_shared_calendar on public.tasks for all to anon, authenticated using (true) with check (true);
 create policy subtasks_shared_calendar on public.subtasks for all to anon, authenticated using (true) with check (true);
 create policy birthdays_shared_calendar on public.birthdays for all to anon, authenticated using (true) with check (true);
-create policy subscriptions_register on public.notification_subscriptions for insert to anon, authenticated with check (true);
-create policy subscriptions_update on public.notification_subscriptions for update to anon, authenticated using (true) with check (true);
-create policy snoozes_register on public.reminder_snoozes for insert to anon, authenticated with check (true);
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.tasks, public.subtasks, public.birthdays to anon, authenticated;
-grant insert, update on public.notification_subscriptions to anon, authenticated;
-grant insert on public.reminder_snoozes to anon, authenticated;
+revoke all on function public.materialize_recurring_tasks(date, date) from public;
 grant execute on function public.materialize_recurring_tasks(date, date) to anon, authenticated;
+revoke all on public.notification_subscriptions from anon, authenticated;
 revoke all on public.notification_log from anon, authenticated;
+revoke all on public.reminder_snoozes from anon, authenticated;
 
 alter publication supabase_realtime add table public.tasks;
 alter publication supabase_realtime add table public.subtasks;
