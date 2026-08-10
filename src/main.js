@@ -10,6 +10,9 @@ import {
   toggleSubtask, toggleTask,
 } from './lib/store.js';
 import {
+  filterByPriorityGroup, PRIORITY_GROUPS, priorityGroup, weeklyPrioritySummary,
+} from './lib/task-groups.js';
+import {
   currentSubscription, disablePush, enablePush, pushStatus as getPushStatus,
   registerServiceWorker, showTestNotification,
 } from './lib/push.js';
@@ -32,7 +35,7 @@ const REMINDER_CHOICES = [
 ];
 
 const state = {
-  view: 'today',
+  view: 'general',
   person: localStorage.getItem('pdr-person') || 'ambos',
   cursor: chileToday(),
   selectedDate: chileToday(),
@@ -44,6 +47,7 @@ const state = {
   loading: true,
   pushEnabled: false,
   notificationStatus: null,
+  priorityFilter: 'all',
 };
 
 let realtimeTimer;
@@ -105,6 +109,7 @@ function sortToday(tasks) {
 }
 
 function rangeForView() {
+  if (state.view === 'general') return { start: startOfWeek(state.cursor), end: endOfWeek(state.cursor) };
   if (state.view === 'week') return { start: startOfWeek(state.cursor), end: endOfWeek(state.cursor) };
   if (state.view === 'month') return monthBounds(state.cursor);
   if (state.view === 'history') {
@@ -143,7 +148,7 @@ function header() {
       </div>
     </header>
     <nav class="tabs" aria-label="Vistas">
-      ${tab('today', 'Hoy')}${tab('week', 'Semana')}${tab('month', 'Mes')}${tab('history', 'Completadas')}${tab('birthdays', 'Cumpleaños')}
+      ${tab('general', 'General')}${tab('today', 'Hoy')}${tab('week', 'Semana')}${tab('month', 'Mes')}${tab('history', 'Completadas')}${tab('birthdays', 'Cumpleaños')}
     </nav>`;
 }
 
@@ -170,11 +175,48 @@ function render() {
 }
 
 function renderView() {
+  if (state.view === 'general') return renderGeneral();
   if (state.view === 'week') return renderWeek();
   if (state.view === 'month') return renderMonth();
   if (state.view === 'history') return renderHistory();
   if (state.view === 'birthdays') return renderBirthdays();
   return renderToday();
+}
+
+function sortGeneral(tasks) {
+  return [...tasks].sort((a, b) => {
+    const dateDiff = a.date.localeCompare(b.date);
+    if (dateDiff) return dateDiff;
+    if (a.completed !== b.completed) return Number(a.completed) - Number(b.completed);
+    const priorityDiff = (PRIORITY_WEIGHT[b.priority] || 0) - (PRIORITY_WEIGHT[a.priority] || 0);
+    if (priorityDiff) return priorityDiff;
+    return (a.deadline_time || a.start_time || '99:99').localeCompare(b.deadline_time || b.start_time || '99:99');
+  });
+}
+
+function renderGeneral() {
+  const start = startOfWeek(state.cursor);
+  const end = endOfWeek(state.cursor);
+  const tasks = state.tasks.filter(visible);
+  const summary = weeklyPrioritySummary(tasks);
+  const pending = tasks.filter((task) => !task.completed).length;
+  const filteredTasks = sortGeneral(filterByPriorityGroup(tasks, state.priorityFilter));
+  const filterLabel = state.priorityFilter === 'all' ? 'Todas las tareas' : PRIORITY_GROUPS[state.priorityFilter].label;
+  const defaultDate = chileToday() >= start && chileToday() <= end ? chileToday() : state.cursor;
+  return `
+    ${viewHeader(`General · ${formatLongDate(start)} al ${formatLongDate(end)}`, 'week')}
+    <section class="general-overview" aria-label="Resumen semanal por importancia">
+      ${prioritySummaryButton('all', 'Todas', pending, tasks.length)}
+      ${prioritySummaryButton('critical', PRIORITY_GROUPS.critical.label, summary.critical.pending, summary.critical.total)}
+      ${prioritySummaryButton('medium', PRIORITY_GROUPS.medium.label, summary.medium.pending, summary.medium.total)}
+      ${prioritySummaryButton('low', PRIORITY_GROUPS.low.label, summary.low.pending, summary.low.total)}
+    </section>
+    <section class="card quick-card"><div class="card-head"><h2>+ Nueva tarea</h2><span>Para cualquier día de la semana</span><button class="button small" data-action="new-task" data-date="${defaultDate}">Más opciones</button></div>${quickForm(defaultDate)}</section>
+    <section class="card task-list general-list"><div class="card-head"><h2>${escapeHTML(filterLabel)}</h2><span>${filteredTasks.filter((task) => !task.completed).length} pendientes · ${filteredTasks.length} en total</span></div>${filteredTasks.length ? filteredTasks.map((task) => taskRow(task, { showDate: true })).join('') : '<div class="empty">No hay tareas en este grupo para la semana seleccionada.</div>'}</section>`;
+}
+
+function prioritySummaryButton(filter, label, pending, total) {
+  return `<button class="priority-summary ${filter} ${state.priorityFilter === filter ? 'active' : ''}" data-priority-filter="${filter}" aria-pressed="${state.priorityFilter === filter}"><span>${escapeHTML(label)}</span><strong>${pending}</strong><small>${pending === 1 ? 'pendiente' : 'pendientes'} · ${total} ${total === 1 ? 'tarea' : 'tareas'}</small></button>`;
 }
 
 function renderToday() {
@@ -226,17 +268,17 @@ function quickForm(today) {
   </form>`;
 }
 
-function taskRow(task) {
+function taskRow(task, { showDate = false } = {}) {
   const status = deadlineState(task);
   const category = CATEGORY[task.category] || CATEGORY.otro;
   const time = task.start_time || '—';
   const subtaskCount = task.subtasks?.length || 0;
   const subtaskDone = task.subtasks?.filter((item) => item.completed).length || 0;
   return `<article class="task-row ${status}" data-open-task="${task.id}" draggable="true" data-task-id="${task.id}">
-    <div class="task-time">${escapeHTML(time.slice(0, 5))}${task.deadline_time ? `<small>tope ${escapeHTML(task.deadline_time.slice(0, 5))}</small>` : ''}</div>
+    <div class="task-time">${showDate ? `<b>${escapeHTML(formatShortDay(task.date))} ${Number(task.date.slice(-2))}</b>` : ''}${escapeHTML(time.slice(0, 5))}${task.deadline_time ? `<small>tope ${escapeHTML(task.deadline_time.slice(0, 5))}</small>` : ''}</div>
     <button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button>
     <div><div class="task-title"><i class="responsible-dot" style="background:${category[1]}"></i>${escapeHTML(task.title)}</div><div class="task-meta">${PERSON[task.responsible]} · ${escapeHTML(category[0])}${subtaskCount ? ` · ${subtaskDone}/${subtaskCount} subtareas` : ''}</div></div>
-    <div class="task-right">${task.completed ? '<span class="pill completed">Lista</span>' : `<span class="pill ${task.priority}">${task.priority}</span>`}<div class="relative ${status}">${escapeHTML(relativeDeadline(task))}</div></div>
+    <div class="task-right">${task.completed ? '<span class="pill completed">Lista</span>' : `<span class="pill ${priorityGroup(task.priority)}">${task.priority}</span>`}<div class="relative ${status}">${escapeHTML(relativeDeadline(task))}</div></div>
     <button class="task-delete" data-delete-task="${task.id}" aria-label="Eliminar ${escapeHTML(task.title)}" title="Eliminar tarea"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/></svg></button>
   </article>`;
 }
@@ -282,7 +324,7 @@ function dayPanel(iso) {
   const birthdays = birthdayByDate(iso);
   const load = dayLoad(iso);
   const [label, color] = loadMeta(load);
-  return `<aside class="card day-panel"><div class="card-head"><h2>Detalle del día</h2><button class="button small primary" data-action="new-task" data-date="${iso}">+ Tarea</button></div><div class="day-panel-body"><h2>${escapeHTML(formatLongDate(iso))}</h2><div class="task-meta" style="color:${color}">${load}% · carga ${label}</div>${birthdays.map((birthday) => `<div class="birthday-notice" style="margin-top:10px"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}${tasks.map((task) => `<div class="day-panel-task"><button data-open-task="${task.id}"><b>${escapeHTML(task.title)}</b><div class="task-meta">${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</div></button></div>`).join('') || '<div class="empty">Sin tareas</div>'}</div></aside>`;
+  return `<aside class="card day-panel"><div class="card-head"><h2>Detalle del día</h2><button class="button small primary" data-action="new-task" data-date="${iso}">+ Tarea</button></div><div class="day-panel-body"><h2>${escapeHTML(formatLongDate(iso))}</h2><div class="task-meta" style="color:${color}">${load}% · carga ${label}</div>${birthdays.map((birthday) => `<div class="birthday-notice" style="margin-top:10px"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}${tasks.map((task) => `<div class="day-panel-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-panel-task-content" data-open-task="${task.id}"><b>${escapeHTML(task.title)}</b><div class="task-meta">${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</div></button><span aria-hidden="true">›</span></div>`).join('') || '<div class="empty">Sin tareas</div>'}</div></aside>`;
 }
 
 function renderHistory() {
@@ -332,7 +374,7 @@ function dayModal(iso) {
   const birthdays = birthdayByDate(iso);
   return `<div class="modal-backdrop" data-close-modal><section class="modal day-modal" role="dialog" aria-modal="true" aria-labelledby="day-modal-title">
     <div class="modal-head"><div><span class="eyebrow">Tareas del día</span><h2 id="day-modal-title">${escapeHTML(formatLongDate(iso))}</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
-    <div class="modal-body">${birthdays.map((birthday) => `<div class="birthday-notice"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}<div class="day-modal-list">${tasks.map((task) => `<button class="day-modal-task ${task.completed ? 'completed' : ''}" data-open-task="${task.id}"><span class="responsible-dot" style="background:${(CATEGORY[task.category] || CATEGORY.otro)[1]}"></span><span><b>${escapeHTML(task.title)}</b><small>${task.deadline_time ? `Tope ${escapeHTML(task.deadline_time.slice(0, 5))} · ` : ''}${PERSON[task.responsible]}</small></span><span aria-hidden="true">›</span></button>`).join('') || '<div class="empty">No hay tareas para este día.</div>'}</div></div>
+    <div class="modal-body">${birthdays.map((birthday) => `<div class="birthday-notice"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}<div class="day-modal-list">${tasks.map((task) => `<article class="day-modal-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-modal-task-content" data-open-task="${task.id}"><span class="responsible-dot" style="background:${(CATEGORY[task.category] || CATEGORY.otro)[1]}"></span><span><b>${escapeHTML(task.title)}</b><small>${task.deadline_time ? `Tope ${escapeHTML(task.deadline_time.slice(0, 5))} · ` : ''}${PERSON[task.responsible]}</small></span><span aria-hidden="true">›</span></button></article>`).join('') || '<div class="empty">No hay tareas para este día.</div>'}</div></div>
     <div class="modal-actions"><button class="button push-right primary" type="button" data-action="new-task" data-date="${iso}">+ Nueva tarea</button></div>
   </section></div>`;
 }
@@ -408,6 +450,8 @@ document.addEventListener('click', (event) => {
   if (person) { state.person = person; localStorage.setItem('pdr-person', person); render(); return; }
   const view = event.target.closest('[data-view]')?.dataset.view;
   if (view) { state.view = view; state.cursor = chileToday(); state.selectedDate = chileToday(); refresh(); return; }
+  const priorityFilter = event.target.closest('[data-priority-filter]')?.dataset.priorityFilter;
+  if (priorityFilter) { state.priorityFilter = priorityFilter; render(); return; }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action) handleAction(action, event.target.closest('[data-action]'));
   const toggleId = event.target.closest('[data-toggle-task]')?.dataset.toggleTask;
@@ -441,7 +485,7 @@ function handleAction(action, element) {
   if (action === 'today') { state.cursor = chileToday(); state.selectedDate = chileToday(); refresh(); }
   if (action === 'previous' || action === 'next') {
     const amount = action === 'previous' ? -1 : 1;
-    state.cursor = state.view === 'week' ? addDays(state.cursor, amount * 7) : addMonths(state.cursor, amount);
+    state.cursor = ['general', 'week'].includes(state.view) ? addDays(state.cursor, amount * 7) : addMonths(state.cursor, amount);
     state.selectedDate = state.cursor;
     refresh();
   }
