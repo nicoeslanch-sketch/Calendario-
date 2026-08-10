@@ -465,14 +465,36 @@ function submitQuick(form) {
   const data = new FormData(form);
   withBusy(form.querySelector('button[type="submit"]'), async () => {
     const reminder = Number(data.get('reminder_minutes_before'));
-    await saveTask({ title: data.get('title').trim(), date: data.get('date'), deadline_time: data.get('deadline_time') || null, responsible: data.get('responsible'), reminder_minutes: reminder > 0 ? [reminder] : [], reminder_minutes_before: reminder, priority: 'alta', category: 'deadline', recurrence_rule: { frequency: 'none' }, subtasks: [] });
-    form.reset(); toast('Tarea creada', 'Ya está disponible para ambos dispositivos.'); await refresh({ quiet: true });
+    const input = { title: data.get('title').trim(), date: data.get('date'), deadline_time: data.get('deadline_time') || null, responsible: data.get('responsible'), reminder_minutes: reminder > 0 ? [reminder] : [], reminder_minutes_before: reminder, priority: 'alta', category: 'deadline', recurrence_rule: { frequency: 'none' }, subtasks: [] };
+    await saveTask(input);
+    focusScheduledTask(input);
+    form.reset();
+    toast('Tarea agendada', `${PERSON[input.responsible]} · ${formatLongDate(input.date)}`);
+    await refresh({ quiet: true });
   });
 }
 
 function submitTask(form) {
   const task = state.modal.task;
-  withBusy(form.querySelector('button[type="submit"]'), async () => { await saveTask(taskFromForm(form), task.id); state.modal = null; toast(task.id ? 'Tarea actualizada' : 'Tarea creada'); await refresh({ quiet: true }); });
+  const input = taskFromForm(form);
+  withBusy(form.querySelector('button[type="submit"]'), async () => {
+    await saveTask(input, task.id);
+    if (task.id) state.modal = null;
+    else focusScheduledTask(input);
+    toast(task.id ? 'Tarea actualizada' : 'Tarea agendada', `${PERSON[input.responsible]} · ${formatLongDate(input.date)}`);
+    await refresh({ quiet: true });
+  });
+}
+
+function focusScheduledTask(task) {
+  state.cursor = task.date;
+  state.selectedDate = task.date;
+  if (state.person !== 'ambos' && task.responsible !== 'ambos' && state.person !== task.responsible) {
+    state.person = task.responsible;
+    localStorage.setItem('pdr-person', task.responsible);
+  }
+  if (state.view === 'today' && task.date !== chileToday()) state.view = 'month';
+  state.modal = state.view === 'month' && window.matchMedia('(max-width: 700px)').matches ? { type: 'day', date: task.date } : null;
 }
 
 function submitBirthday(form) {

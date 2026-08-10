@@ -48,4 +48,15 @@ describe('local calendar persistence', () => {
     await store.deleteBirthday(birthday.id);
     expect((await store.loadRange('2026-08-01', '2026-08-31')).birthdays).toHaveLength(0);
   });
+
+  it('persists future tasks assigned to Benjamín', async () => {
+    const created = await store.saveTask({
+      title: 'Seguimiento Benjamín', date: '2026-08-21', responsible: 'benjamin',
+      recurrence_rule: { frequency: 'none' }, subtasks: [],
+    });
+    const tasks = (await store.loadRange('2026-08-21', '2026-08-21')).tasks;
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ title: 'Seguimiento Benjamín', responsible: 'benjamin' });
+    await store.deleteTask(created.id);
+  });
 });
