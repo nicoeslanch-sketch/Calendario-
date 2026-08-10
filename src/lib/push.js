@@ -33,7 +33,7 @@ export async function showTestNotification() {
   }
   const registration = await registerServiceWorker();
   await navigator.serviceWorker.ready;
-  await registration.showNotification('PDR Planner · Aviso de prueba', {
+  await registration.showNotification('Planner Santa Clara · Aviso de prueba', {
     body: 'Si ves este cuadro, los avisos del calendario pueden mostrarse en este PC.',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',

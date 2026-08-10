@@ -20,7 +20,7 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() || {};
-  const title = data.title || 'PDR Planner';
+  const title = data.title || 'Planner Santa Clara';
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || 'Tienes un pendiente próximo.',
     icon: '/icons/icon-192.png',

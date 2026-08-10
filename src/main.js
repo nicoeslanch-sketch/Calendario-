@@ -134,7 +134,7 @@ async function refresh({ quiet = false } = {}) {
 function header() {
   return `
     <header class="topbar">
-      <div class="brand"><strong>PDR Planner</strong><small>Calendario operativo</small></div>
+      <div class="brand"><span class="brand-logo"><img src="/icons/parque-del-recuerdo.png" alt=""></span><strong>Planner Santa Clara</strong><small>Calendario operativo</small></div>
       <div class="top-actions">
         <div class="person-switch" role="group" aria-label="Filtrar por responsable">
           ${personButton('nicolas', 'N')} ${personButton('benjamin', 'B')} ${personButton('ambos', '')}
@@ -164,7 +164,7 @@ function viewHeader(title, mode = null) {
 function render() {
   app.innerHTML = `${header()}<main class="app-main">
     ${backendMode() === 'local' ? '<div class="status-banner"><b>Modo local:</b> configura Supabase para compartir y sincronizar el calendario. Los cambios de esta sesión se guardan en este navegador.</div>' : ''}
-    ${isIOS() && !window.matchMedia('(display-mode: standalone)').matches ? '<div class="ios-banner">Para recibir avisos en iPhone, agrega PDR Planner a la pantalla de inicio desde Safari.</div>' : ''}
+    ${isIOS() && !window.matchMedia('(display-mode: standalone)').matches ? '<div class="ios-banner">Para recibir avisos en iPhone, agrega Planner Santa Clara a la pantalla de inicio desde Safari.</div>' : ''}
     ${state.loading ? '<div class="card empty">Cargando calendario…</div>' : renderView()}
   </main>${renderModal()}`;
 }
@@ -237,6 +237,7 @@ function taskRow(task) {
     <button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button>
     <div><div class="task-title"><i class="responsible-dot" style="background:${category[1]}"></i>${escapeHTML(task.title)}</div><div class="task-meta">${PERSON[task.responsible]} · ${escapeHTML(category[0])}${subtaskCount ? ` · ${subtaskDone}/${subtaskCount} subtareas` : ''}</div></div>
     <div class="task-right">${task.completed ? '<span class="pill completed">Lista</span>' : `<span class="pill ${task.priority}">${task.priority}</span>`}<div class="relative ${status}">${escapeHTML(relativeDeadline(task))}</div></div>
+    <button class="task-delete" data-delete-task="${task.id}" aria-label="Eliminar ${escapeHTML(task.title)}" title="Eliminar tarea"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/></svg></button>
   </article>`;
 }
 
@@ -322,7 +323,18 @@ function renderModal() {
   if (!state.modal) return '';
   if (state.modal.type === 'notifications') return notificationModal();
   if (state.modal.type === 'birthday') return birthdayModal(state.modal.birthday);
+  if (state.modal.type === 'day') return dayModal(state.modal.date);
   return taskModal(state.modal.task);
+}
+
+function dayModal(iso) {
+  const tasks = sortToday(byDate(iso));
+  const birthdays = birthdayByDate(iso);
+  return `<div class="modal-backdrop" data-close-modal><section class="modal day-modal" role="dialog" aria-modal="true" aria-labelledby="day-modal-title">
+    <div class="modal-head"><div><span class="eyebrow">Tareas del día</span><h2 id="day-modal-title">${escapeHTML(formatLongDate(iso))}</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+    <div class="modal-body">${birthdays.map((birthday) => `<div class="birthday-notice"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}<div class="day-modal-list">${tasks.map((task) => `<button class="day-modal-task ${task.completed ? 'completed' : ''}" data-open-task="${task.id}"><span class="responsible-dot" style="background:${(CATEGORY[task.category] || CATEGORY.otro)[1]}"></span><span><b>${escapeHTML(task.title)}</b><small>${task.deadline_time ? `Tope ${escapeHTML(task.deadline_time.slice(0, 5))} · ` : ''}${PERSON[task.responsible]}</small></span><span aria-hidden="true">›</span></button>`).join('') || '<div class="empty">No hay tareas para este día.</div>'}</div></div>
+    <div class="modal-actions"><button class="button push-right primary" type="button" data-action="new-task" data-date="${iso}">+ Nueva tarea</button></div>
+  </section></div>`;
 }
 
 function taskModal(task = {}) {
@@ -400,12 +412,12 @@ document.addEventListener('click', (event) => {
   if (action) handleAction(action, event.target.closest('[data-action]'));
   const toggleId = event.target.closest('[data-toggle-task]')?.dataset.toggleTask;
   if (toggleId) { event.preventDefault(); event.stopPropagation(); const task = state.tasks.find((item) => item.id === toggleId); const wasCompleted = task.completed; withBusy(event.target, async () => { await toggleTask(task); toast(wasCompleted ? 'Tarea desmarcada' : 'Tarea completada'); await refresh({ quiet: true }); }); return; }
+  const deleteId = event.target.closest('[data-delete-task]')?.dataset.deleteTask;
+  if (deleteId) { event.preventDefault(); event.stopPropagation(); removeTask(deleteId, event.target.closest('[data-delete-task]')); return; }
   const openId = event.target.closest('[data-open-task]')?.dataset.openTask;
   if (openId) { const task = state.tasks.find((item) => item.id === openId) || state.history.find((item) => item.id === openId); state.modal = { type: 'task', task }; render(); return; }
   const selectedDate = event.target.closest('[data-select-date]')?.dataset.selectDate;
-  if (selectedDate) { state.selectedDate = selectedDate; render(); return; }
-  const deleteId = event.target.closest('[data-delete-task]')?.dataset.deleteTask;
-  if (deleteId) removeTask(deleteId, event.target);
+  if (selectedDate) { state.selectedDate = selectedDate; if (window.matchMedia('(max-width: 700px)').matches) state.modal = { type: 'day', date: selectedDate }; render(); return; }
   const duplicateId = event.target.closest('[data-duplicate-task]')?.dataset.duplicateTask;
   if (duplicateId) copyTask(duplicateId, event.target);
   const editBirthdayId = event.target.closest('[data-edit-birthday]')?.dataset.editBirthday;
