@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, deadlineState, endOfWeek, monthGrid, startOfWeek } from '../src/lib/date.js';
+import { addDays, deadlineState, endOfWeek, isBirthdayOn, monthGrid, startOfWeek } from '../src/lib/date.js';
 
 describe('calendar dates', () => {
   it('builds Monday-to-Sunday weeks', () => {
@@ -29,5 +29,16 @@ describe('deadlines', () => {
   it('uses the earliest scheduled point when a task has multiple reminders', () => {
     const task = { date: '2026-08-09', deadline_time: '14:00', completed: false, reminder_minutes: [10, 60] };
     expect(deadlineState(task, new Date('2026-08-09T17:30:00Z'))).toBe('urgent');
+  });
+});
+
+describe('birthdays', () => {
+  it('matches the same day and month every year only while active', () => {
+    const birthday = { month: 8, day: 14, active: true };
+
+    expect(isBirthdayOn(birthday, '2026-08-14')).toBe(true);
+    expect(isBirthdayOn(birthday, '2027-08-14')).toBe(true);
+    expect(isBirthdayOn(birthday, '2027-08-15')).toBe(false);
+    expect(isBirthdayOn({ ...birthday, active: false }, '2027-08-14')).toBe(false);
   });
 });
