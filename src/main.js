@@ -119,20 +119,43 @@ function rangeForView() {
   return { start, end: addDays(chileToday(), 35) };
 }
 
+let refreshPromise = null;
+let refreshQueued = false;
+let queuedRefreshQuiet = true;
+
 async function refresh({ quiet = false } = {}) {
+  if (refreshPromise) {
+    refreshQueued = true;
+    queuedRefreshQuiet = queuedRefreshQuiet && quiet;
+    return refreshPromise;
+  }
   if (!quiet) state.loading = true;
+  refreshPromise = (async () => {
+    try {
+      const range = rangeForView();
+      const data = await loadRange(range.start, range.end);
+      state.tasks = data.tasks;
+      state.birthdays = data.birthdays;
+      if (state.view === 'history') state.history = await loadHistory(state.historyDays);
+    } catch (error) {
+      console.error(error);
+      toast('No se pudieron cargar los datos', error.message, 'error');
+    } finally {
+      state.loading = false;
+      render();
+    }
+  })();
+
   try {
-    const range = rangeForView();
-    const data = await loadRange(range.start, range.end);
-    state.tasks = data.tasks;
-    state.birthdays = data.birthdays;
-    if (state.view === 'history') state.history = await loadHistory(state.historyDays);
-  } catch (error) {
-    console.error(error);
-    toast('No se pudieron cargar los datos', error.message, 'error');
+    await refreshPromise;
   } finally {
-    state.loading = false;
-    render();
+    refreshPromise = null;
+    if (refreshQueued) {
+      const quietNext = queuedRefreshQuiet;
+      refreshQueued = false;
+      queuedRefreshQuiet = true;
+      queueMicrotask(() => refresh({ quiet: quietNext }));
+    }
   }
 }
 

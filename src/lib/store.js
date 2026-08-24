@@ -56,7 +56,8 @@ export async function loadRange(start, end) {
       birthdays: local.birthdays.filter((birthday) => birthday.active),
     };
   }
-  await supabase.rpc('materialize_recurring_tasks', { p_start: start, p_end: end });
+  const { error: materializeError } = await supabase.rpc('materialize_recurring_tasks', { p_start: start, p_end: end });
+  if (materializeError) throw materializeError;
   const [tasksResult, birthdaysResult] = await Promise.all([
     supabase.from('tasks').select('*, subtasks(*)').gte('date', start).lte('date', end).eq('is_recurring_template', false).order('date').order('position').order('start_time', { nullsFirst: false }),
     supabase.from('birthdays').select('*').eq('active', true).order('month').order('day'),
@@ -96,14 +97,16 @@ export async function saveTask(input, id = null) {
   if (id) result = await supabase.from('tasks').update(payload).eq('id', id).select().single();
   else result = await supabase.from('tasks').insert(payload).select().single();
   if (result.error) throw result.error;
-  await supabase.from('subtasks').delete().eq('task_id', result.data.id);
+  const { error: deleteSubtasksError } = await supabase.from('subtasks').delete().eq('task_id', result.data.id);
+  if (deleteSubtasksError) throw deleteSubtasksError;
   if (subtasks.length) {
     const { error } = await supabase.from('subtasks').insert(subtasks.filter((subtask) => subtask.title?.trim()).map((subtask, position) => ({ task_id: result.data.id, title: subtask.title.trim(), completed: Boolean(subtask.completed), position })));
     if (error) throw error;
   }
   if (payload.is_recurring_template) {
     const end = new Date(); end.setFullYear(end.getFullYear() + 1);
-    await supabase.rpc('materialize_recurring_tasks', { p_start: task.date, p_end: end.toISOString().slice(0, 10) });
+    const { error: materializeError } = await supabase.rpc('materialize_recurring_tasks', { p_start: task.date, p_end: end.toISOString().slice(0, 10) });
+    if (materializeError) throw materializeError;
   }
   return result.data;
 }
