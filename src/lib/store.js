@@ -8,7 +8,7 @@ export const supabase = hasRemote ? createClient(url, key, {
 }) : null;
 
 const LOCAL_KEY = 'pdr-planner-local-v1';
-const empty = { tasks: [], birthdays: [], subscriptions: [] };
+const empty = { tasks: [], birthdays: [], projects: [], subscriptions: [] };
 let local = readLocal();
 
 function readLocal() {
@@ -45,6 +45,14 @@ function normalizeTask(task) {
   return normalized;
 }
 
+function normalizeProject(project) {
+  return {
+    description: '', purpose: '', kpis: '', responsible: 'ambos',
+    status: 'sin_iniciar', priority: 'amarillo', completed_at: null,
+    ...project,
+  };
+}
+
 export function backendMode() {
   return hasRemote ? 'supabase' : 'local';
 }
@@ -75,6 +83,62 @@ export async function loadHistory(days = 30) {
   const { data, error } = await supabase.from('tasks').select('*').eq('completed', true).gte('completed_at', since).order('completed_at', { ascending: false }).limit(100);
   if (error) throw error;
   return data;
+}
+
+export async function loadProjects() {
+  if (!supabase) return local.projects.map(normalizeProject);
+  const { data, error } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data.map(normalizeProject);
+}
+
+export async function saveProject(input, id = null) {
+  const project = normalizeProject(input);
+  project.completed_at = project.status === 'completado'
+    ? (project.completed_at || new Date().toISOString())
+    : null;
+  if (!supabase) {
+    const now = new Date().toISOString();
+    const saved = { ...project, id: id || uuid(), created_at: now, updated_at: now };
+    const index = local.projects.findIndex((item) => item.id === saved.id);
+    if (index >= 0) local.projects[index] = { ...local.projects[index], ...saved };
+    else local.projects.push(saved);
+    writeLocal();
+    return saved;
+  }
+  const query = id
+    ? supabase.from('projects').update(project).eq('id', id)
+    : supabase.from('projects').insert(project);
+  const { data, error } = await query.select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function patchProject(id, updates) {
+  const normalized = { ...updates };
+  if ('status' in normalized) {
+    normalized.completed_at = normalized.status === 'completado' ? new Date().toISOString() : null;
+  }
+  if (!supabase) {
+    const project = local.projects.find((item) => item.id === id);
+    if (!project) throw new Error('Proyecto no encontrado.');
+    Object.assign(project, normalized, { updated_at: new Date().toISOString() });
+    writeLocal();
+    return project;
+  }
+  const { data, error } = await supabase.from('projects').update(normalized).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProject(id) {
+  if (!supabase) {
+    local.projects = local.projects.filter((project) => project.id !== id);
+    writeLocal();
+    return;
+  }
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function saveTask(input, id = null) {
@@ -253,6 +317,7 @@ export function subscribeRealtime(onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'birthdays' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
 }

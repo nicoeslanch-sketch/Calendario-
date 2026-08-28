@@ -5,8 +5,8 @@ import {
   monthBounds, monthGrid, relativeDeadline, startOfWeek,
 } from './lib/date.js';
 import {
-  backendMode, deleteBirthday, deleteTask, duplicateTask, loadHistory, loadRange,
-  patchTask, saveBirthday, saveTask, snoozeTask, subscribeRealtime,
+  backendMode, deleteBirthday, deleteProject, deleteTask, duplicateTask, loadHistory, loadProjects, loadRange,
+  patchProject, patchTask, saveBirthday, saveProject, saveTask, snoozeTask, subscribeRealtime,
   toggleSubtask, toggleTask,
 } from './lib/store.js';
 import {
@@ -29,6 +29,16 @@ const CATEGORY = {
   otro: ['Otro', '#718077'],
 };
 const PRIORITY_WEIGHT = { baja: 12, media: 20, alta: 28, urgente: 38 };
+const PROJECT_PRIORITY = {
+  rojo: { label: 'Alta', color: 'var(--stop)', rank: 0 },
+  amarillo: { label: 'Media', color: 'var(--warn)', rank: 1 },
+  verde: { label: 'Baja', color: 'var(--go)', rank: 2 },
+};
+const PROJECT_STATUS = {
+  sin_iniciar: 'Sin iniciar',
+  iniciado: 'Iniciado',
+  completado: 'Completado',
+};
 const REMINDER_CHOICES = [
   [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min'],
   [60, '1 hora'], [120, '2 horas'], [1440, '1 día'], [2880, '2 días'], [10080, '1 semana'],
@@ -41,6 +51,7 @@ const state = {
   selectedDate: chileToday(),
   tasks: [],
   birthdays: [],
+  projects: [],
   history: [],
   historyDays: 30,
   modal: null,
@@ -48,6 +59,8 @@ const state = {
   pushEnabled: false,
   notificationStatus: null,
   priorityFilter: 'all',
+  projectPriorityFilter: 'all',
+  projectStatusFilter: 'all',
 };
 
 let realtimeTimer;
@@ -136,6 +149,7 @@ async function refresh({ quiet = false } = {}) {
       const data = await loadRange(range.start, range.end);
       state.tasks = data.tasks;
       state.birthdays = data.birthdays;
+      if (state.view === 'projects') state.projects = await loadProjects();
       if (state.view === 'history') state.history = await loadHistory(state.historyDays);
     } catch (error) {
       console.error(error);
@@ -171,7 +185,7 @@ function header() {
       </div>
     </header>
     <nav class="tabs" aria-label="Vistas">
-      ${tab('general', 'General')}${tab('today', 'Hoy')}${tab('week', 'Semana')}${tab('month', 'Mes')}${tab('history', 'Completadas')}${tab('birthdays', 'Cumpleaños')}
+      ${tab('general', 'General')}${tab('today', 'Hoy')}${tab('week', 'Semana')}${tab('month', 'Mes')}${tab('projects', 'Proyectos')}${tab('history', 'Completadas')}${tab('birthdays', 'Cumpleaños')}
     </nav>`;
 }
 
@@ -201,6 +215,7 @@ function renderView() {
   if (state.view === 'general') return renderGeneral();
   if (state.view === 'week') return renderWeek();
   if (state.view === 'month') return renderMonth();
+  if (state.view === 'projects') return renderProjects();
   if (state.view === 'history') return renderHistory();
   if (state.view === 'birthdays') return renderBirthdays();
   return renderToday();
@@ -350,6 +365,72 @@ function dayPanel(iso) {
   return `<aside class="card day-panel"><div class="card-head"><h2>Detalle del día</h2><button class="button small primary" data-action="new-task" data-date="${iso}">+ Tarea</button></div><div class="day-panel-body"><h2>${escapeHTML(formatLongDate(iso))}</h2><div class="task-meta" style="color:${color}">${load}% · carga ${label}</div>${birthdays.map((birthday) => `<div class="birthday-notice" style="margin-top:10px"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}${tasks.map((task) => `<div class="day-panel-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-panel-task-content" data-open-task="${task.id}"><b>${escapeHTML(task.title)}</b><div class="task-meta">${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</div></button><span aria-hidden="true">›</span></div>`).join('') || '<div class="empty">Sin tareas</div>'}</div></aside>`;
 }
 
+function projectVisible(project) {
+  return state.person === 'ambos' || project.responsible === state.person || project.responsible === 'ambos';
+}
+
+function sortedProjects(projects) {
+  const statusRank = { iniciado: 0, sin_iniciar: 1, completado: 2 };
+  return [...projects].sort((a, b) => {
+    const priorityDiff = (PROJECT_PRIORITY[a.priority]?.rank ?? 9) - (PROJECT_PRIORITY[b.priority]?.rank ?? 9);
+    if (priorityDiff) return priorityDiff;
+    const statusDiff = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+    if (statusDiff) return statusDiff;
+    return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+  });
+}
+
+function projectSummaryButton(priority, label, projects) {
+  const pending = projects.filter((project) => project.priority === priority && project.status !== 'completado').length;
+  const total = projects.filter((project) => project.priority === priority).length;
+  return `<button class="priority-summary ${priority} ${state.projectPriorityFilter === priority ? 'active' : ''}" data-project-priority-filter="${priority}"><span>${escapeHTML(label)}</span><strong>${pending}</strong><small>${total} ${total === 1 ? 'proyecto' : 'proyectos'} · ${pending} activos</small></button>`;
+}
+
+function renderProjects() {
+  const visibleProjects = state.projects.filter(projectVisible);
+  const filtered = sortedProjects(visibleProjects.filter((project) => (
+    (state.projectPriorityFilter === 'all' || project.priority === state.projectPriorityFilter)
+    && (state.projectStatusFilter === 'all' || project.status === state.projectStatusFilter)
+  )));
+  const active = visibleProjects.filter((project) => project.status !== 'completado').length;
+  return `${viewHeader('Proyectos')}
+    <section class="projects-intro">
+      <div><span class="eyebrow">Portafolio sin fecha</span><h2>${active} ${active === 1 ? 'proyecto activo' : 'proyectos activos'}</h2><p>Ordenados por prioridad. Los proyectos rojos envían un aviso diario a las 09:00 mientras no estén completados.</p></div>
+      <button class="button primary" data-action="new-project">+ Nuevo proyecto</button>
+    </section>
+    <section class="general-overview project-overview" aria-label="Resumen de proyectos por prioridad">
+      <button class="priority-summary ${state.projectPriorityFilter === 'all' ? 'active' : ''}" data-project-priority-filter="all"><span>Todos</span><strong>${active}</strong><small>${visibleProjects.length} en total</small></button>
+      ${projectSummaryButton('rojo', 'Alta · Rojo', visibleProjects)}
+      ${projectSummaryButton('amarillo', 'Media · Amarillo', visibleProjects)}
+      ${projectSummaryButton('verde', 'Baja · Verde', visibleProjects)}
+    </section>
+    <section class="project-toolbar card">
+      <div><b>${filtered.length} ${filtered.length === 1 ? 'proyecto' : 'proyectos'}</b><span>La prioridad alta aparece primero.</span></div>
+      <label>Estado<select data-project-status-filter><option value="all">Todos los estados</option>${Object.entries(PROJECT_STATUS).map(([value, label]) => `<option value="${value}" ${state.projectStatusFilter === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+    </section>
+    <section class="project-grid">${filtered.length ? filtered.map(projectCard).join('') : '<div class="card empty">No hay proyectos para estos filtros.</div>'}</section>`;
+}
+
+function projectCard(project) {
+  const priority = PROJECT_PRIORITY[project.priority] || PROJECT_PRIORITY.amarillo;
+  return `<article class="card project-card priority-${project.priority} ${project.status === 'completado' ? 'completed' : ''}">
+    <div class="project-card-head"><span class="project-light" style="--project-color:${priority.color}"></span><span class="pill project-priority ${project.priority}">${priority.label}</span><span class="pill project-status">${escapeHTML(PROJECT_STATUS[project.status] || project.status)}</span></div>
+    <h2>${escapeHTML(project.idea)}</h2>
+    <p class="project-description">${escapeHTML(project.description || 'Sin descripción.')}</p>
+    <dl class="project-details">
+      <div><dt>Para qué se hace</dt><dd>${escapeHTML(project.purpose || 'Sin definir')}</dd></div>
+      <div><dt>KPIs / impacto esperado</dt><dd>${escapeHTML(project.kpis || 'Sin definir')}</dd></div>
+      <div><dt>Responsable</dt><dd>${escapeHTML(PERSON[project.responsible] || project.responsible)}</dd></div>
+    </dl>
+    <div class="project-card-actions">
+      <label>Estado<select data-project-status="${project.id}">${Object.entries(PROJECT_STATUS).map(([value, label]) => `<option value="${value}" ${project.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      <button class="button small" data-edit-project="${project.id}">Editar</button>
+      <button class="button small danger" data-delete-project="${project.id}">Eliminar</button>
+    </div>
+    ${project.priority === 'rojo' && project.status !== 'completado' ? '<div class="project-alert-note">🔔 Alerta diaria activa · 09:00</div>' : ''}
+  </article>`;
+}
+
 function renderHistory() {
   const list = state.history.filter(visible);
   return `${viewHeader('Completadas recientemente')}<div class="history-controls"><select class="button" data-history-days><option value="7" ${state.historyDays === 7 ? 'selected' : ''}>Últimos 7 días</option><option value="30" ${state.historyDays === 30 ? 'selected' : ''}>Últimos 30 días</option></select></div><section class="card history-list">${list.length ? list.map((task) => `<article class="task-row completed" data-open-task="${task.id}"><span class="check">✓</span><div><div class="task-title">${escapeHTML(task.title)}</div><div class="task-meta">${PERSON[task.responsible]} · tarea del ${escapeHTML(formatLongDate(task.date))}</div></div><div class="relative completed">${escapeHTML(relativeDeadline(task))}</div></article>`).join('') : '<div class="empty">No hay tareas completadas en este período.</div>'}</section>`;
@@ -389,7 +470,28 @@ function renderModal() {
   if (state.modal.type === 'notifications') return notificationModal();
   if (state.modal.type === 'birthday') return birthdayModal(state.modal.birthday);
   if (state.modal.type === 'day') return dayModal(state.modal.date);
+  if (state.modal.type === 'project') return projectModal(state.modal.project);
   return taskModal(state.modal.task);
+}
+
+function projectModal(project = {}) {
+  const isNew = !project.id;
+  const status = project.status || 'sin_iniciar';
+  const priority = project.priority || 'amarillo';
+  return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true" aria-labelledby="project-modal-title"><form id="project-form">
+    <div class="modal-head"><div><span class="eyebrow">Portafolio de iniciativas</span><h2 id="project-modal-title">${isNew ? 'Nuevo proyecto' : 'Editar proyecto'}</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+    <div class="modal-body"><div class="form-grid">
+      <div class="field wide"><label>Idea / nombre del proyecto</label><input name="idea" required maxlength="180" value="${escapeHTML(project.idea || '')}" placeholder="Ej. Automatizar seguimiento comercial" autofocus></div>
+      <div class="field wide"><label>Descripción del proyecto</label><textarea name="description" maxlength="4000" placeholder="Qué se quiere construir o cambiar">${escapeHTML(project.description || '')}</textarea></div>
+      <div class="field wide"><label>Para qué se hace / a quién ayuda</label><textarea name="purpose" maxlength="2000" placeholder="Objetivo, problema que resuelve o equipo beneficiado">${escapeHTML(project.purpose || '')}</textarea></div>
+      <div class="field wide"><label>KPIs o impacto esperado</label><textarea name="kpis" maxlength="2000" placeholder="Ej. tiempo de respuesta, conversión, mora, horas ahorradas">${escapeHTML(project.kpis || '')}</textarea></div>
+      <div class="field"><label>Responsable</label><select name="responsible">${personOptions(project.responsible || state.person)}</select></div>
+      <div class="field"><label>Estado</label><select name="status">${Object.entries(PROJECT_STATUS).map(([value, label]) => `<option value="${value}" ${status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
+      <div class="field"><label>Prioridad / semáforo</label><select name="priority"><option value="rojo" ${priority === 'rojo' ? 'selected' : ''}>🔴 Alta</option><option value="amarillo" ${priority === 'amarillo' ? 'selected' : ''}>🟡 Media</option><option value="verde" ${priority === 'verde' ? 'selected' : ''}>🟢 Baja</option></select></div>
+      <div class="project-reminder-info"><b>Alertas automáticas</b><span>Los proyectos rojos sin completar enviarán un aviso diario a las 09:00 al responsable.</span></div>
+    </div></div>
+    <div class="modal-actions">${!isNew ? `<button type="button" class="button danger" data-delete-project="${project.id}">Eliminar</button>` : ''}<button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar proyecto</button></div>
+  </form></section></div>`;
 }
 
 function dayModal(iso) {
@@ -462,6 +564,19 @@ function taskFromForm(form) {
   };
 }
 
+function projectFromForm(form) {
+  const data = new FormData(form);
+  return {
+    idea: data.get('idea').trim(),
+    description: data.get('description').trim(),
+    purpose: data.get('purpose').trim(),
+    kpis: data.get('kpis').trim(),
+    responsible: data.get('responsible'),
+    status: data.get('status'),
+    priority: data.get('priority'),
+  };
+}
+
 async function withBusy(element, operation) {
   if (element) element.disabled = true;
   try { await operation(); } catch (error) { console.error(error); toast('No se pudo guardar', error.message, 'error'); }
@@ -475,6 +590,8 @@ document.addEventListener('click', (event) => {
   if (view) { state.view = view; state.cursor = chileToday(); state.selectedDate = chileToday(); refresh(); return; }
   const priorityFilter = event.target.closest('[data-priority-filter]')?.dataset.priorityFilter;
   if (priorityFilter) { state.priorityFilter = priorityFilter; render(); return; }
+  const projectPriorityFilter = event.target.closest('[data-project-priority-filter]')?.dataset.projectPriorityFilter;
+  if (projectPriorityFilter) { state.projectPriorityFilter = projectPriorityFilter; render(); return; }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action) handleAction(action, event.target.closest('[data-action]'));
   const toggleId = event.target.closest('[data-toggle-task]')?.dataset.toggleTask;
@@ -491,6 +608,10 @@ document.addEventListener('click', (event) => {
   if (editBirthdayId) { state.modal = { type: 'birthday', birthday: state.birthdays.find((item) => item.id === editBirthdayId) }; render(); return; }
   const deleteBirthdayId = event.target.closest('[data-delete-birthday]')?.dataset.deleteBirthday;
   if (deleteBirthdayId) removeBirthday(deleteBirthdayId, event.target);
+  const editProjectId = event.target.closest('[data-edit-project]')?.dataset.editProject;
+  if (editProjectId) { state.modal = { type: 'project', project: state.projects.find((item) => item.id === editProjectId) }; render(); return; }
+  const deleteProjectId = event.target.closest('[data-delete-project]')?.dataset.deleteProject;
+  if (deleteProjectId) { event.preventDefault(); event.stopPropagation(); removeProject(deleteProjectId, event.target); return; }
   const snooze = event.target.closest('[data-snooze]');
   if (snooze) withBusy(snooze, async () => { await snoozeTask(snooze.dataset.task, Number(snooze.dataset.snooze)); toast('Recordatorio programado', `Te avisaremos en ${snooze.dataset.snooze} minutos.`); });
   if (event.target.matches('[data-close-modal]') && (event.target.classList.contains('modal-backdrop') || !event.target.closest('.modal-body'))) { state.modal = null; render(); }
@@ -504,6 +625,7 @@ function handleAction(action, element) {
     render();
   }
   if (action === 'new-task') { state.modal = { type: 'task', task: { date: element.dataset.date || state.selectedDate } }; render(); }
+  if (action === 'new-project') { state.modal = { type: 'project', project: {} }; render(); }
   if (action === 'add-subtask') document.querySelector('#subtasks').insertAdjacentHTML('beforeend', subtaskInput());
   if (action === 'today') { state.cursor = chileToday(); state.selectedDate = chileToday(); refresh(); }
   if (action === 'previous' || action === 'next') {
@@ -525,6 +647,7 @@ document.addEventListener('submit', (event) => {
   if (event.target.id === 'task-form') submitTask(event.target);
   if (event.target.id === 'birthday-form') submitBirthday(event.target);
   if (event.target.id === 'birthday-edit-form') submitBirthdayEdit(event.target);
+  if (event.target.id === 'project-form') submitProject(event.target);
   if (event.target.id === 'notification-form') submitNotifications(event.target);
 });
 
@@ -574,6 +697,17 @@ function submitBirthdayEdit(form) {
   withBusy(form.querySelector('button[type="submit"]'), async () => { await saveBirthday({ name: data.get('name').trim(), month, day, description: data.get('description').trim(), active: true }, birthday.id); state.modal = null; toast('Cumpleaños actualizado'); await refresh({ quiet: true }); });
 }
 
+function submitProject(form) {
+  const project = state.modal.project;
+  const input = projectFromForm(form);
+  withBusy(form.querySelector('button[type="submit"]'), async () => {
+    await saveProject(input, project.id);
+    state.modal = null;
+    toast(project.id ? 'Proyecto actualizado' : 'Proyecto creado', `${PROJECT_PRIORITY[input.priority].label} · ${PROJECT_STATUS[input.status]}`);
+    await refresh({ quiet: true });
+  });
+}
+
 function submitNotifications(form) {
   const data = new FormData(form);
   withBusy(form.querySelector('button[type="submit"]'), async () => {
@@ -601,8 +735,29 @@ async function removeBirthday(id, button) {
   await withBusy(button, async () => { await deleteBirthday(id); toast('Cumpleaños eliminado'); await refresh({ quiet: true }); });
 }
 
+async function removeProject(id, button) {
+  if (!confirm('¿Eliminar este proyecto? Esta acción no se puede deshacer.')) return;
+  await withBusy(button, async () => {
+    await deleteProject(id);
+    state.modal = null;
+    toast('Proyecto eliminado');
+    await refresh({ quiet: true });
+  });
+}
+
 document.addEventListener('change', (event) => {
   if (event.target.matches('[data-history-days]')) { state.historyDays = Number(event.target.value); refresh(); }
+  if (event.target.matches('[data-project-status-filter]')) { state.projectStatusFilter = event.target.value; render(); }
+  if (event.target.matches('[data-project-status]')) {
+    const project = state.projects.find((item) => item.id === event.target.dataset.projectStatus);
+    if (project && project.status !== event.target.value) {
+      withBusy(event.target, async () => {
+        await patchProject(project.id, { status: event.target.value });
+        toast('Estado actualizado', PROJECT_STATUS[event.target.value]);
+        await refresh({ quiet: true });
+      });
+    }
+  }
   if (event.target.matches('.subtask-check') && event.target.dataset.subtaskId) withBusy(event.target, async () => { await toggleSubtask(event.target.dataset.subtaskId, event.target.checked); });
 });
 
@@ -632,6 +787,8 @@ async function initialize() {
     realtimeTimer = setTimeout(() => refresh({ quiet: true }), 180);
   });
   const params = new URLSearchParams(location.search);
+  const requestedProject = params.get('project');
+  if (requestedProject) state.view = 'projects';
   if (params.get('action') === 'new') state.modal = { type: 'task', task: { date: chileToday() } };
   if (params.get('snooze') && params.get('task')) {
     await snoozeTask(params.get('task'), Number(params.get('snooze')));
@@ -639,6 +796,14 @@ async function initialize() {
     history.replaceState({}, '', '/');
   }
   await refresh();
+  if (requestedProject) {
+    const project = state.projects.find((item) => item.id === requestedProject);
+    if (project) {
+      state.modal = { type: 'project', project };
+      render();
+    }
+    history.replaceState({}, '', '/');
+  }
 }
 
 initialize();

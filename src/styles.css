@@ -73,6 +73,9 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
 .priority-summary.critical { --group-color: var(--stop); }
 .priority-summary.medium { --group-color: var(--warn); }
 .priority-summary.low { --group-color: var(--go); }
+.priority-summary.rojo { --group-color: var(--stop); }
+.priority-summary.amarillo { --group-color: var(--warn); }
+.priority-summary.verde { --group-color: var(--go); }
 .priority-summary:hover { border-color: var(--group-color); transform: translateY(-1px); }
 .priority-summary.active { outline: 2px solid var(--group-color); outline-offset: 1px; }
 .priority-summary span { color: var(--group-color); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -188,6 +191,43 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
 .day-modal-task small { margin-top: 2px; color: var(--muted); font-size: 11px; }
 .day-modal-task.completed b { color: #648071; text-decoration: line-through; }
 
+.projects-intro { margin-bottom: 15px; padding: 18px 20px; display: flex; align-items: center; gap: 18px; border-radius: var(--radius); color: #fff; background: linear-gradient(120deg, var(--pine), #285c49); box-shadow: var(--shadow); }
+.projects-intro .eyebrow { color: #a9c8b7; font: 700 10px "IBM Plex Mono", monospace; letter-spacing: .09em; text-transform: uppercase; }
+.projects-intro h2 { margin-top: 3px; font-size: clamp(23px, 3vw, 31px); }
+.projects-intro p { max-width: 720px; margin-top: 5px; color: #d3e2da; font-size: 12px; }
+.projects-intro .button { margin-left: auto; flex: none; color: var(--pine); background: #fff; border-color: #fff; }
+.project-toolbar { margin-bottom: 12px; padding: 11px 14px; display: flex; align-items: end; gap: 16px; }
+.project-toolbar div { display: flex; flex-direction: column; }
+.project-toolbar span { color: var(--muted); font-size: 11px; }
+.project-toolbar label { margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.project-toolbar select, .project-card-actions select { min-height: 34px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.project-toolbar select { min-width: 180px; margin-left: 8px; }
+.project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.project-card { padding: 16px; overflow: hidden; border-top: 4px solid var(--project-card-color, var(--warn)); }
+.project-card.priority-rojo { --project-card-color: var(--stop); }
+.project-card.priority-amarillo { --project-card-color: var(--warn); }
+.project-card.priority-verde { --project-card-color: var(--go); }
+.project-card.completed { opacity: .7; }
+.project-card.completed h2 { color: #648071; text-decoration: line-through; }
+.project-card-head { display: flex; align-items: center; gap: 6px; }
+.project-light { width: 11px; height: 11px; display: inline-block; border-radius: 50%; background: var(--project-color); box-shadow: 0 0 0 4px color-mix(in srgb, var(--project-color), transparent 84%); }
+.project-priority.rojo { color: var(--stop); background: #fff0ee; border-color: #eac2bd; }
+.project-priority.amarillo { color: #8d6012; background: #fff8e7; border-color: #ead69e; }
+.project-priority.verde { color: var(--go); background: #edf8f1; border-color: #b8dcc6; }
+.project-status { margin-left: auto; }
+.project-card h2 { margin-top: 13px; font-size: 19px; line-height: 1.15; }
+.project-description { min-height: 40px; margin-top: 7px; color: var(--muted); white-space: pre-line; }
+.project-details { margin: 14px 0 0; display: grid; gap: 9px; }
+.project-details div { padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.project-details dt { color: var(--muted); font-size: 9.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.project-details dd { margin: 3px 0 0; white-space: pre-line; }
+.project-card-actions { margin-top: 15px; padding-top: 12px; display: flex; align-items: end; gap: 6px; border-top: 1px solid var(--line-soft); }
+.project-card-actions label { margin-right: auto; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.project-card-actions label select { margin-top: 3px; display: block; text-transform: none; }
+.project-alert-note { margin: 12px -16px -16px; padding: 9px 16px; color: #8b302a; background: #fff1ef; font-size: 10.5px; font-weight: 700; }
+.project-reminder-info { grid-column: 1 / -1; padding: 11px 12px; display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--stop); border-radius: 8px; color: #8b302a; background: #fff3f1; font-size: 11px; }
+.project-reminder-info span { color: #78514d; }
+
 .history-controls { margin-bottom: 12px; display: flex; justify-content: flex-end; }
 .history-list .task-row { grid-template-columns: 24px minmax(0, 1fr) auto; }
 .birthday-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -237,6 +277,7 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
   .quick-form .button { width: 100%; }
   .day-panel { position: static; }
   .birthday-grid { grid-template-columns: 1fr 1fr; }
+  .project-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 700px) {
@@ -270,6 +311,15 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
   .month-bday { font-size: 0; }
   .month-bday::after { content: '🎂'; font-size: 9px; }
   .birthday-grid { grid-template-columns: 1fr; }
+  .projects-intro { align-items: flex-start; flex-direction: column; }
+  .projects-intro .button { width: 100%; margin-left: 0; }
+  .project-toolbar { align-items: stretch; flex-direction: column; }
+  .project-toolbar label { margin-left: 0; }
+  .project-toolbar select { width: 100%; margin: 4px 0 0; }
+  .project-grid { grid-template-columns: 1fr; }
+  .project-card-actions { flex-wrap: wrap; }
+  .project-card-actions label { width: 100%; margin-bottom: 4px; }
+  .project-card-actions label select { width: 100%; }
   .modal-backdrop { padding: 0; align-items: end; }
   .modal { width: 100%; max-height: 94dvh; border-radius: 17px 17px 0 0; }
   .form-grid { grid-template-columns: 1fr; }

@@ -1,0 +1,2 @@
+create index if not exists project_notification_log_subscription_idx
+on public.project_notification_log(subscription_id);

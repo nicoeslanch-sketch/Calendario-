@@ -59,4 +59,32 @@ describe('local calendar persistence', () => {
     expect(tasks[0]).toMatchObject({ title: 'Seguimiento Benjamín', responsible: 'benjamin' });
     await store.deleteTask(created.id);
   });
+
+  it('creates, starts, completes and deletes projects without dates', async () => {
+    const created = await store.saveProject({
+      idea: 'Automatizar seguimiento',
+      description: 'Crear un tablero compartido.',
+      purpose: 'Reducir trabajo manual.',
+      kpis: 'Horas ahorradas; tiempo de respuesta',
+      responsible: 'ambos',
+      status: 'sin_iniciar',
+      priority: 'rojo',
+    });
+
+    let projects = await store.loadProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0]).toMatchObject({ idea: 'Automatizar seguimiento', priority: 'rojo', status: 'sin_iniciar' });
+
+    await store.patchProject(created.id, { status: 'iniciado' });
+    projects = await store.loadProjects();
+    expect(projects[0].status).toBe('iniciado');
+    expect(projects[0].completed_at).toBeNull();
+
+    await store.patchProject(created.id, { status: 'completado' });
+    projects = await store.loadProjects();
+    expect(projects[0].completed_at).toBeTruthy();
+
+    await store.deleteProject(created.id);
+    expect(await store.loadProjects()).toHaveLength(0);
+  });
 });
