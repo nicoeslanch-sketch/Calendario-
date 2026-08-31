@@ -36,6 +36,7 @@ function normalizeTask(task) {
   const normalized = {
     description: '', start_time: null, deadline_time: null, responsible: 'ambos',
     priority: 'media', category: 'otro', completed: false, completed_at: null,
+    is_secondary: false,
     reminder_minutes_before: 60, reminder_minutes: [60], recurrence_rule: { frequency: 'none' },
     notify_target: 'responsable', estimated_minutes: 30, preparation_business_days: 0,
     position: 0, metadata: {}, subtasks: [], ...task,

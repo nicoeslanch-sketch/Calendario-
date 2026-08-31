@@ -228,6 +228,23 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
 .project-reminder-info { grid-column: 1 / -1; padding: 11px 12px; display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--stop); border-radius: 8px; color: #8b302a; background: #fff3f1; font-size: 11px; }
 .project-reminder-info span { color: #78514d; }
 
+.secondary-intro { padding-block: 14px; }
+.secondary-intro h2 { font-size: clamp(20px, 2.4vw, 27px); }
+.secondary-quick-card { margin-bottom: 12px; padding: 12px; }
+.secondary-quick-form { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr)) auto; align-items: end; gap: 9px; }
+.secondary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; align-items: start; }
+.secondary-grid > .empty { grid-column: 1 / -1; }
+.secondary-card { min-height: 112px; padding: 11px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 28px; align-items: start; gap: 9px; border-top: 3px solid var(--secondary-color, var(--go)); cursor: pointer; }
+.secondary-card.priority-urgente { --secondary-color: var(--stop); }
+.secondary-card.priority-alta { --secondary-color: #d87536; }
+.secondary-card.priority-media { --secondary-color: var(--warn); }
+.secondary-card.priority-baja { --secondary-color: var(--go); }
+.secondary-check { margin-top: 2px; }
+.secondary-card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--muted); font: 700 10px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.secondary-card h2 { margin-top: 8px; font-size: 15px; line-height: 1.2; }
+.secondary-card p { margin-top: 5px; overflow: hidden; color: var(--muted); font-size: 10.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.secondary-card .task-delete { align-self: start; }
+
 .history-controls { margin-bottom: 12px; display: flex; justify-content: flex-end; }
 .history-list .task-row { grid-template-columns: 24px minmax(0, 1fr) auto; }
 .birthday-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -278,6 +295,9 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
   .day-panel { position: static; }
   .birthday-grid { grid-template-columns: 1fr 1fr; }
   .project-grid { grid-template-columns: 1fr 1fr; }
+  .secondary-quick-form { grid-template-columns: 2fr 1fr 1fr; }
+  .secondary-quick-form .button { width: 100%; }
+  .secondary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
@@ -317,6 +337,10 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
   .project-toolbar label { margin-left: 0; }
   .project-toolbar select { width: 100%; margin: 4px 0 0; }
   .project-grid { grid-template-columns: 1fr; }
+  .secondary-quick-form { grid-template-columns: 1fr 1fr; }
+  .secondary-title-field { grid-column: 1 / -1; }
+  .secondary-quick-form .button { grid-column: 1 / -1; }
+  .secondary-grid { grid-template-columns: 1fr; }
   .project-card-actions { flex-wrap: wrap; }
   .project-card-actions label { width: 100%; margin-bottom: 4px; }
   .project-card-actions label select { width: 100%; }

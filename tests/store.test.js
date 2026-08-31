@@ -87,4 +87,29 @@ describe('local calendar persistence', () => {
     await store.deleteProject(created.id);
     expect(await store.loadProjects()).toHaveLength(0);
   });
+
+  it('keeps secondary tasks in the weekly range and moves them to completed history', async () => {
+    const created = await store.saveTask({
+      title: 'Confirmar envío de minuta',
+      date: '2026-08-31',
+      responsible: 'ambos',
+      priority: 'baja',
+      is_secondary: true,
+      reminder_minutes: [],
+      recurrence_rule: { frequency: 'none' },
+      subtasks: [],
+    });
+
+    let tasks = (await store.loadRange('2026-08-31', '2026-09-06')).tasks;
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ is_secondary: true, completed: false });
+
+    await store.toggleTask(tasks[0]);
+    tasks = (await store.loadRange('2026-08-31', '2026-09-06')).tasks;
+    expect(tasks[0].completed).toBe(true);
+    const history = await store.loadHistory(30);
+    expect(history.some((task) => task.id === created.id && task.is_secondary)).toBe(true);
+
+    await store.deleteTask(created.id);
+  });
 });
