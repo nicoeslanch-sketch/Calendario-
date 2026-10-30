@@ -303,9 +303,10 @@ h1, h2, h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; letter-s
 @media (max-width: 700px) {
   .topbar { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
   .brand small { display: none; }
-  .top-actions { width: 100%; margin-left: 0; }
-  .person-switch { flex: 1; }
+  .top-actions { width: 100%; margin-left: 0; flex-wrap: wrap; }
+  .person-switch { width: 100%; flex: 1 0 100%; }
   .person-switch button { flex: 1; padding-inline: 6px; }
+  .notify-button { margin-left: auto; }
   .notify-button { font-size: 0; }
   .notify-button::before { content: '🔔'; font-size: 15px; }
   .tabs { top: 115px; }

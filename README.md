@@ -1,6 +1,6 @@
 # PDR Planner
 
-PDR Planner es un calendario operativo compartido para Nicolás y Benjamín. Reúne tareas, deadlines, subtareas, carga diaria, recurrencias, preparación previa, cumpleaños y avisos Web Push sin cuentas ni login.
+PDR Planner es un calendario operativo compartido para Nicolás, Benjamín y Tomás. Cada uno tiene su vista individual y la vista Compartido reúne las tareas de los tres. Reúne tareas, deadlines, subtareas, carga diaria, recurrencias, preparación previa, cumpleaños y avisos Web Push sin cuentas ni login.
 
 No es una plataforma comercial y no almacena RUT, ventas, rankings, mora, contratos ni datos sensibles.
 
@@ -78,7 +78,7 @@ La función guarda ambos valores en Supabase Vault y crea `pdr-push-dispatch` co
 ## Cómo funcionan los avisos
 
 1. “Activar avisos” registra el Service Worker y solicita permiso.
-2. El dispositivo se asocia a Nicolás, Benjamín o Los dos.
+2. El dispositivo se asocia a Nicolás, Benjamín, Tomás o Compartido.
 3. Cron invoca `push-dispatch` cada dos minutos.
 4. La función busca recordatorios previos, vencimientos y avisos pospuestos.
 5. Se reserva un registro único en `notification_log` antes de enviar, evitando duplicados.

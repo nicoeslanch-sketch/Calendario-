@@ -1,7 +1,7 @@
 {
   "name": "Planner Santa Clara",
   "short_name": "Santa Clara",
-  "description": "Calendario operativo compartido de Nicolás y Benjamín.",
+  "description": "Calendario operativo compartido de Nicolás, Benjamín y Tomás.",
   "lang": "es-CL",
   "start_url": "/?source=pwa",
   "scope": "/",

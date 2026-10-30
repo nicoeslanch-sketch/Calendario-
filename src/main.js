@@ -16,10 +16,9 @@ import {
   currentSubscription, disablePush, enablePush, pushStatus as getPushStatus,
   registerServiceWorker, showTestNotification,
 } from './lib/push.js';
+import { isValidPerson, isVisibleForPerson, PERSON, PERSON_COLOR } from './lib/people.js';
 
 const app = document.querySelector('#app');
-const PERSON = { nicolas: 'Nicolás', benjamin: 'Benjamín', ambos: 'Los dos' };
-const PERSON_COLOR = { nicolas: '#3e6b8c', benjamin: '#a94f86', ambos: '#2f8659' };
 const CATEGORY = {
   reunion: ['Reunión', '#3e6b8c'],
   deadline: ['Deadline', '#bb3f34'],
@@ -52,7 +51,7 @@ const REMINDER_CHOICES = [
 
 const state = {
   view: 'general',
-  person: localStorage.getItem('pdr-person') || 'ambos',
+  person: isValidPerson(localStorage.getItem('pdr-person')) ? localStorage.getItem('pdr-person') : 'ambos',
   cursor: chileToday(),
   selectedDate: chileToday(),
   tasks: [],
@@ -87,7 +86,7 @@ function toast(title, detail = '', kind = 'success') {
 }
 
 function visible(task) {
-  return state.person === 'ambos' || task.responsible === state.person || task.responsible === 'ambos';
+  return isVisibleForPerson(state.person, task.responsible);
 }
 
 function byDate(iso) {
@@ -186,7 +185,7 @@ function header() {
       <div class="brand"><span class="brand-logo"><img src="/icons/parque-del-recuerdo.png" alt=""></span><strong>Planner Santa Clara</strong><small>Calendario operativo</small></div>
       <div class="top-actions">
         <div class="person-switch" role="group" aria-label="Filtrar por responsable">
-          ${personButton('nicolas', 'N')} ${personButton('benjamin', 'B')} ${personButton('ambos', '')}
+          ${personButton('nicolas', 'N')} ${personButton('benjamin', 'B')} ${personButton('tomas', 'T')} ${personButton('ambos', '')}
         </div>
         <button class="notify-button ${state.pushEnabled ? 'enabled' : ''}" data-action="notifications">${state.pushEnabled ? 'Avisos activos' : 'Activar avisos'}</button>
       </div>
@@ -417,7 +416,7 @@ function secondaryTaskCard(task) {
 }
 
 function projectVisible(project) {
-  return state.person === 'ambos' || project.responsible === state.person || project.responsible === 'ambos';
+  return isVisibleForPerson(state.person, project.responsible);
 }
 
 function sortedProjects(projects) {
@@ -566,7 +565,7 @@ function taskModal(task = {}) {
       <div class="field wide"><label>Título</label><input name="title" required maxlength="160" value="${escapeHTML(task.title || '')}" autofocus></div>
       <div class="field wide"><label>Descripción</label><textarea name="description" maxlength="2000">${escapeHTML(task.description || '')}</textarea></div>
       <div class="field"><label>Responsable</label><select name="responsible">${personOptions(task.responsible || state.person)}</select></div>
-      <div class="field"><label>Notificar</label><select name="notify_target"><option value="responsable" ${task.notify_target !== 'ambos' ? 'selected' : ''}>Responsable solamente</option><option value="ambos" ${task.notify_target === 'ambos' ? 'selected' : ''}>Los dos</option></select></div>
+      <div class="field"><label>Notificar</label><select name="notify_target"><option value="responsable" ${task.notify_target !== 'ambos' ? 'selected' : ''}>Responsable solamente</option><option value="ambos" ${task.notify_target === 'ambos' ? 'selected' : ''}>Los tres</option></select></div>
       <div class="field"><label>Fecha</label><input name="date" type="date" required value="${task.date || state.selectedDate || chileToday()}"></div>
       <div class="field"><label>Hora de inicio</label><input name="start_time" type="time" value="${task.start_time?.slice(0, 5) || ''}"></div>
       <div class="field"><label>Hora límite</label><input name="deadline_time" type="time" value="${task.deadline_time?.slice(0, 5) || ''}"></div>
