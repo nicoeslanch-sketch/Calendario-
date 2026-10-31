@@ -1,4 +1,4 @@
-import './styles.css';
+import calendarStyles from './styles.css?raw';
 import {
   addDays, addMonths, birthdayISO, chileToday, deadlineState, endOfWeek,
   formatLongDate, formatMonth, formatShortDay, isBirthdayOn, isIOS,
@@ -8,7 +8,7 @@ import {
   backendMode, deleteBirthday, deleteProject, deleteTask, duplicateTask, loadHistory, loadProjects, loadRange,
   patchProject, patchTask, saveBirthday, saveProject, saveTask, snoozeTask, subscribeRealtime,
   toggleSubtask, toggleTask,
-} from './lib/store.js';
+} from './lib/calendar-store.js';
 import {
   filterByPriorityGroup, PRIORITY_GROUPS, priorityGroup, weeklyPrioritySummary,
 } from './lib/task-groups.js';
@@ -16,8 +16,32 @@ import {
   currentSubscription, disablePush, enablePush, pushStatus as getPushStatus,
   registerServiceWorker, showTestNotification,
 } from './lib/push.js';
-import { isValidPerson, isVisibleForPerson, PERSON, PERSON_COLOR } from './lib/people.js';
+import { isVisibleForPerson } from './lib/people.js';
 
+// Keep a separate calendar instance for each signed-in workspace profile.
+export function mountCalendar(host, profile, profiles) {
+const shadow = host.attachShadow({ mode: 'open' });
+const controller = new AbortController();
+const document = {
+  querySelector: (selector) => shadow.querySelector(selector),
+  createElement: (tag) => window.document.createElement(tag),
+  addEventListener: (type, listener) => shadow.addEventListener(type, listener, { signal: controller.signal }),
+};
+const PERSON = Object.fromEntries(profiles.map((p) => [p.id, p.name]));
+shadow.innerHTML = `<style>${calendarStyles.replace(':root', ':host')}
+  :host { display:block; min-width:0; color:var(--ink); font:14px/1.45 "IBM Plex Sans",system-ui,sans-serif; }
+  .calendar-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:0 0 18px; }
+  .calendar-bar p { color:var(--muted); font-size:12px; }
+  .calendar-bar .notify-button { color:var(--pine); border-color:var(--line); background:white; }
+  .tabs { position:static; padding:0; border:1px solid var(--line); border-radius:12px; }
+  .tabs button { letter-spacing:0; text-transform:none; font-size:12px; padding:14px 13px; }
+  .app-main { padding:22px 0 0; width:100%; }
+  @media(max-width:600px) {
+    .calendar-bar { align-items:flex-start; } .calendar-bar p { max-width:220px; }
+    .tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); overflow:visible; }
+    .tabs button { min-height:44px; white-space:normal; padding:8px 4px; font-size:11px; line-height:1.3; }
+  }
+</style><div id="app"></div><div id="toast-region" class="toast-region" aria-live="polite"></div>`;
 const app = document.querySelector('#app');
 const CATEGORY = {
   reunion: ['Reunión', '#3e6b8c'],
@@ -51,7 +75,7 @@ const REMINDER_CHOICES = [
 
 const state = {
   view: 'general',
-  person: isValidPerson(localStorage.getItem('pdr-person')) ? localStorage.getItem('pdr-person') : 'ambos',
+  person: profile,
   cursor: chileToday(),
   selectedDate: chileToday(),
   tasks: [],
@@ -69,6 +93,7 @@ const state = {
 };
 
 let realtimeTimer;
+let disposed = false;
 
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -181,23 +206,13 @@ async function refresh({ quiet = false } = {}) {
 
 function header() {
   return `
-    <header class="topbar">
-      <div class="brand"><span class="brand-logo"><img src="/icons/parque-del-recuerdo.png" alt=""></span><strong>Planner Santa Clara</strong><small>Calendario operativo</small></div>
-      <div class="top-actions">
-        <div class="person-switch" role="group" aria-label="Filtrar por responsable">
-          ${personButton('nicolas', 'N')} ${personButton('benjamin', 'B')} ${personButton('tomas', 'T')} ${personButton('ambos', '')}
-        </div>
+    <header class="calendar-bar">
+      <div><h1>Calendario comercial</h1><p>${escapeHTML(PERSON[profile])} · ${profile === 'ambos' ? 'Agenda compartida del equipo' : 'Tu agenda personal y las actividades compartidas'}</p></div>
         <button class="notify-button ${state.pushEnabled ? 'enabled' : ''}" data-action="notifications">${state.pushEnabled ? 'Avisos activos' : 'Activar avisos'}</button>
-      </div>
     </header>
     <nav class="tabs" aria-label="Vistas">
       ${tab('general', 'General')}${tab('today', 'Hoy')}${tab('week', 'Semana')}${tab('month', 'Mes')}${tab('secondary', 'Tareas secundarias')}${tab('projects', 'Proyectos')}${tab('history', 'Completadas')}${tab('birthdays', 'Cumpleaños')}
     </nav>`;
-}
-
-function personButton(person, initial) {
-  const label = PERSON[person];
-  return `<button class="${state.person === person ? 'active' : ''}" data-person="${person}" aria-pressed="${state.person === person}">${initial ? `<i style="background:${PERSON_COLOR[person]}">${initial}</i>` : ''}${label}</button>`;
 }
 
 function tab(view, label) {
@@ -210,6 +225,7 @@ function viewHeader(title, mode = null) {
 }
 
 function render() {
+  if (disposed) return;
   app.innerHTML = `${header()}<main class="app-main">
     ${backendMode() === 'local' ? '<div class="status-banner"><b>Modo local:</b> configura Supabase para compartir y sincronizar el calendario. Los cambios de esta sesión se guardan en este navegador.</div>' : ''}
     ${isIOS() && !window.matchMedia('(display-mode: standalone)').matches ? '<div class="ios-banner">Para recibir avisos en iPhone, agrega Planner Santa Clara a la pantalla de inicio desde Safari.</div>' : ''}
@@ -497,7 +513,7 @@ function birthdayCard(birthday) {
 }
 
 function personOptions(selected = 'ambos') {
-  return Object.entries(PERSON).map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+  return Object.entries(PERSON).filter(([id]) => id === profile || (id === 'ambos' && state.modal?.type !== 'notifications')).map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${escapeHTML(label)}</option>`).join('');
 }
 
 function reminderOptions(selected = 60) {
@@ -857,11 +873,16 @@ async function initialize() {
     state.pushEnabled = Boolean(await currentSubscription());
     state.notificationStatus = await getPushStatus();
   } catch (error) { console.warn('Service Worker no disponible:', error); }
-  subscribeRealtime(() => {
+  if (disposed) return;
+  const unsubscribe = subscribeRealtime(() => {
+    if (disposed || !host.isConnected || state.modal) return;
+    if (shadow.activeElement?.matches('input,textarea,select') || document.querySelector('#quick-title')?.value.trim() || document.querySelector('#secondary-form input[name="title"]')?.value.trim()) return;
     clearTimeout(realtimeTimer);
     realtimeTimer = setTimeout(() => refresh({ quiet: true }), 180);
   });
+  cleanupSubscription = unsubscribe;
   const params = new URLSearchParams(location.search);
+  if (['general','today','week','month','secondary','projects','history','birthdays'].includes(params.get('view'))) state.view = params.get('view');
   const requestedProject = params.get('project');
   if (requestedProject) state.view = 'projects';
   if (params.get('action') === 'new') state.modal = { type: 'task', task: { date: chileToday() } };
@@ -881,4 +902,7 @@ async function initialize() {
   }
 }
 
-initialize();
+let cleanupSubscription = () => {};
+initialize().catch((error) => { if (!disposed) toast('No se pudo abrir el calendario', error.message, 'error'); });
+return () => { disposed = true; controller.abort(); clearTimeout(realtimeTimer); cleanupSubscription(); };
+}

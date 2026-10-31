@@ -27,6 +27,14 @@ export async function request(action, payload = {}) {
   return rpc('pdr_workspace', { p_action: action, p_token: session.token, p_payload: payload });
 }
 
+export async function calendarRequest(action, payload = {}) {
+  if (!session) throw new Error('Entra a un perfil para abrir el calendario.');
+  const token = session.token;
+  const result = await rpc('pdr_calendar', { p_action: action, p_token: token, p_payload: payload });
+  if (token !== session?.token) throw new Error('El perfil ha cambiado.');
+  return result;
+}
+
 export async function logout() {
   try { if (session) await request('logout'); } finally {
     session = null;

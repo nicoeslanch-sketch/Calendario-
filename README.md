@@ -1,10 +1,13 @@
 # Espacio PDR
 
-Minutas automatizadas, distribución de tareas e hitos históricos para el equipo Santa Clara.
+Calendario comercial, minutas automatizadas, distribución de tareas e hitos históricos para el equipo Santa Clara.
 
 ## Funcionamiento
 
 - Selecciona el perfil: Nicolás Albornoz, Benjamín Hernández, Tomás Espinoza o Compartido.
+- La navegación principal reúne Calendario, Minutas automatizadas, Distribución de tareas y Mis hitos históricos. El calendario es la vista inicial y conserva General, Hoy, Semana, Mes, Tareas secundarias, Proyectos, Completadas y Cumpleaños.
+- El calendario permite crear, editar, completar, duplicar y eliminar tareas; incluye prioridades semanales, subtareas, arrastre entre días, recurrencias, preparación previa y varios avisos. Conserva la semana/mes y el formulario al pasar entre secciones.
+- Cada agenda personal muestra sus tareas y las compartidas. Compartido muestra solo la agenda común, nunca las tareas privadas de otros perfiles. Se puede crear para el perfil abierto o Compartido. Los cumpleaños son comunes al equipo.
 - Nicolás y Benjamín entran con contraseña verificada en el servidor; Tomás y Compartido tienen acceso directo por decisión del equipo.
 - Cada perfil ve únicamente sus minutas, carpetas e hitos. Compartido tiene sus propios documentos y no funciona como acceso a documentos privados.
 - Distribución muestra las tareas y estados de todo el equipo. Cambian el estado el responsable y el creador de la minuta; los demás consultan.
@@ -16,7 +19,7 @@ Minutas automatizadas, distribución de tareas e hitos históricos para el equip
 
 ## Arquitectura y privacidad
 
-Frontend Vite/JavaScript en `src/workspace.js`; persistencia Supabase a través de tres RPCs: `pdr_profiles`, `pdr_sign_in` y `pdr_workspace`. Las tablas están en `pdr_private`, con RLS y sin permisos directos para anon/authenticated.
+Frontend Vite/JavaScript en `src/workspace.js`; calendario modular en `src/main.js` con estilos aislados y la misma sesión. Persistencia Supabase a través de `pdr_profiles`, `pdr_sign_in`, `pdr_workspace` y `pdr_calendar`. Las tablas de minutas están en `pdr_private`, con RLS y sin permisos directos para anon/authenticated. Las tablas del calendario tampoco permiten acceso directo; el RPC valida la sesión y el perfil en cada operación.
 
 Las sesiones de perfil usan tokens aleatorios de 256 bits almacenados como SHA-256 en la base y duran 12 horas. El navegador conserva el token solo en sessionStorage. La contraseña usa bcrypt y se limita el número de intentos. Los RPCs con SECURITY DEFINER son intencionales: validan la sesión, el propietario y cada operación; tienen search_path vacío y no ejecutan SQL dinámico. El listado de nombres y requisitos de acceso es público para permitir seleccionar perfil.
 
@@ -26,7 +29,7 @@ Los datos se refrescan cada 20 segundos y los contadores de antigüedad cada min
 
 ## Reinicio autorizado
 
-La migración `20261030204957_minutes_workspace.sql` retiró las 862 tareas y los 3 proyectos del calendario anterior, desactivó su cron de avisos y bloqueó los clientes antiguos que materializaban recurrencias. Una instantánea administrativa de tareas, subtareas y proyectos se conserva en `pdr_private.legacy_archive`; no es visible desde la aplicación. Los cumpleaños anteriores no se borraron. El código legado se conserva en Git, pero el punto de entrada publicado es el nuevo espacio.
+La migración `20261030204957_minutes_workspace.sql` retiró las 862 tareas y los 3 proyectos del calendario anterior. Una instantánea administrativa de tareas, subtareas y proyectos se conserva en `pdr_private.legacy_archive`; no es visible desde la aplicación. Los cumpleaños anteriores no se borraron. `20261031155232_restore_calendar_workspace.sql` reincorpora las funciones sin restaurar datos borrados ni reabrir acceso anónimo a las tablas, y reactiva el despacho de avisos existente. Los dispositivos de Compartido ya no reciben avisos privados salvo envío explícito a todo el equipo.
 
 ## Desarrollo y verificación
 
@@ -40,5 +43,7 @@ npm run build
 ```
 
 `supabase/tests/workspace.sql` prueba PIN, sesión, privacidad, distribución, visibilidad de estados, marcas de tiempo, guardado sin duplicados y cierre de sesión dentro de una transacción que se revierte.
+
+`supabase/tests/calendar.sql` prueba CRUD, calendario privado y compartido, subtareas, completadas, recurrencias, preparación, proyectos y cumpleaños dentro de una transacción revertida. Configura también `VITE_VAPID_PUBLIC_KEY` para Web Push; cada dispositivo debe autorizar las notificaciones y asociarse al perfil abierto.
 
 El despliegue de producción se realiza con la integración GitHub → Vercel al actualizar main. Enlace: https://calendario-seven-omega.vercel.app/

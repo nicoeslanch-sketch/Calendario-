@@ -1,7 +1,7 @@
 {
-  "name": "PDR · Minutas y equipo",
+  "name": "PDR · Calendario y equipo",
   "short_name": "Espacio PDR",
-  "description": "Minutas automatizadas, tareas e hitos históricos del equipo PDR.",
+  "description": "Calendario comercial, minutas automatizadas, tareas e hitos históricos del equipo PDR.",
   "lang": "es-CL",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -15,6 +15,7 @@
     { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ],
   "shortcuts": [
+    { "name": "Calendario comercial", "short_name": "Calendario", "url": "/?view=calendar" },
     { "name": "Minutas automatizadas", "short_name": "Minutas", "url": "/?view=minutes" },
     { "name": "Distribución de tareas", "short_name": "Tareas", "url": "/?view=tasks" }
   ]

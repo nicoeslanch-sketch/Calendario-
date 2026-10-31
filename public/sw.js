@@ -1,4 +1,4 @@
-const CACHE = 'pdr-workspace-v3';
+const CACHE = 'pdr-workspace-calendar-v4';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

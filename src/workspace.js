@@ -1,14 +1,18 @@
 import './workspace.css';
 import { login, logout, profiles, request, session } from './lib/workspace-store.js';
 import { analyzeMinute, cleanLine, elapsedSince, STATUS } from './lib/minutes.js';
+import { mountCalendar } from './main.js';
 
 const root = document.querySelector('#app');
 const requestedView = new URLSearchParams(location.search).get('view');
-const state = { profiles: [], data: { minutes: [], folders: [], milestones: [], tasks: [] }, view: 'minutes', profile: null, selected: null, modal: null, editor: null, search: '', status: 'all', busy: false, loading: true, error: '' };
+const state = { profiles: [], data: { minutes: [], folders: [], milestones: [], tasks: [] }, view: 'calendar', profile: null, selected: null, modal: null, editor: null, search: '', status: 'all', busy: false, loading: true, error: '' };
+let calendarHost = null;
+let calendarProfile = null;
+let disposeCalendar = () => {};
 const uuid = () => crypto.randomUUID();
-if (['minutes', 'tasks', 'milestones'].includes(requestedView)) state.view = requestedView;
+if (['calendar', 'minutes', 'tasks', 'milestones'].includes(requestedView)) state.view = requestedView;
 const esc = (v = '') => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const icons = { notes: '▤', tasks: '☑', history: '◷', folder: '▱', plus: '+', lock: '▣' };
+const icons = { calendar: '▦', notes: '▤', tasks: '☑', history: '◷', folder: '▱', plus: '+', lock: '▣' };
 const person = (id) => state.profiles.find((p) => p.id === id);
 const date = (iso) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Santiago' }).format(new Date(iso));
 const firstName = (id) => person(id)?.name.split(' ')[0] || 'Equipo';
@@ -54,14 +58,14 @@ async function refresh({ silent = false } = {}) {
     state.error = error.message;
   }
   state.loading = false;
-  if (!state.modal || !silent) render();
+  if (!silent || (!state.modal && state.view !== 'calendar') || state.error || !state.profile) render();
 }
 function header() {
   const p = person(state.profile);
   return `<header class="topbar"><a href="/" class="brand"><img src="/icons/parque-del-recuerdo.png" alt=""><span>PDR<span class="brand-detail">Espacio de trabajo</span></span></a>
   <div class="profiles" aria-label="Perfiles">${state.profiles.map((item) => `<button data-profile="${esc(item.id)}" class="profile ${state.profile === item.id ? 'active' : ''}" aria-pressed="${state.profile === item.id}">${avatar(item)}<span>${esc(item.name)}${item.locked ? '<small>Acceso con contraseña</small>' : '<small>Acceso directo</small>'}</span>${item.locked ? '<span class="lock" aria-hidden="true">⌑</span>' : ''}</button>`).join('')}</div>
   ${p ? '<button class="icon-button" data-action="logout" title="Cerrar perfil" aria-label="Cerrar perfil">↗</button>' : ''}</header>
-  <nav class="navigation" aria-label="Secciones">${[['minutes','Minutas automatizadas','notes'],['tasks','Distribución de tareas','tasks'],['milestones','Mis hitos históricos','history']].map(([id,label,icon]) => `<button data-view="${id}" aria-current="${state.view === id ? 'page' : 'false'}" class="${state.view === id ? 'active' : ''}"><span aria-hidden="true">${icons[icon]}</span>${label}</button>`).join('')}</nav>`;
+  <nav class="navigation" aria-label="Secciones">${[['calendar','Calendario','calendar'],['minutes','Minutas automatizadas','notes'],['tasks','Distribución de tareas','tasks'],['milestones','Mis hitos históricos','history']].map(([id,label,icon]) => `<button data-view="${id}" aria-current="${state.view === id ? 'page' : 'false'}" class="${state.view === id ? 'active' : ''}"><span aria-hidden="true">${icons[icon]}</span>${label}</button>`).join('')}</nav>`;
 }
 function intro(eyebrow, title, description, action = '') {
   return `<section class="intro"><div><span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p>${description}</p></div>${action}</section>`;
@@ -99,11 +103,25 @@ function milestonesView() {
     <section class="milestone-grid">${list.length ? list.map((h) => `<article class="milestone-card"><div class="card-top"><span class="year">${h.year}</span><span class="document-icon">◷</span></div><button class="card-title" data-milestone="${h.id}">${esc(h.title)}</button><p>${esc(h.purpose || h.guidelines || 'Planificación y aprendizajes guardados.')}</p><div class="milestone-detail"><span>Directrices</span><p>${esc(h.guidelines || 'Sin directrices aún.')}</p></div><footer><button class="text-button" data-milestone="${h.id}">Ver historial ↗</button><button class="button small" data-reuse="${h.id}">Usar como base</button></footer></article>`).join('') : empty('Tu experiencia merece un lugar', 'Crea tu primer hito y conserva lo necesario para repetirlo o mejorarlo en otros años.', '◷')}</section>`;
 }
 function loginView() {
-  return intro('BIENVENIDOS AL ESPACIO PDR', 'Las ideas merecen continuidad.', 'Elige tu perfil arriba para escribir minutas, distribuir tareas y construir el historial de tus proyectos.') +
-    `<section class="welcome-card"><div class="welcome-graphic"><span>▤</span><i>→</i><span>▱</span><i>→</i><span>☑</span></div><h2>De los puntos de una reunión<br>a un equipo en movimiento.</h2><p>Tu perfil reúne tus minutas y tus hitos. El tablero de tareas permite acompañar el avance de cada integrante.</p></section>`;
+  return intro('BIENVENIDOS AL ESPACIO PDR', 'Las ideas merecen continuidad.', 'Elige tu perfil arriba para organizar tu calendario, escribir minutas y acompañar el avance del equipo.') +
+    `<section class="welcome-card"><div class="welcome-graphic"><span>▦</span><i>+</i><span>▤</span><i>→</i><span>☑</span></div><h2>Tu agenda y tus acuerdos,<br>en un solo espacio.</h2><p>Calendario para el día a día, minutas para distribuir tareas e hitos para recordar lo aprendido. Siempre con el mismo perfil.</p></section>`;
 }
 function render() {
-  root.innerHTML = header() + `<main>${state.error ? `<div class="error-banner" role="alert">${esc(state.error)} <button data-action="reload">Reintentar</button></div>` : ''}${state.loading ? '<div class="loading">Preparando tu espacio…</div>' : !state.profile ? loginView() : state.view === 'minutes' ? minutesView() : state.view === 'tasks' ? tasksView() : milestonesView()}</main><footer class="app-footer"><span>PDR · Equipo Santa Clara</span><span>Ideas claras. Acuerdos que avanzan.</span></footer>${modalView()}`;
+  if (calendarProfile !== state.profile) {
+    disposeCalendar(); calendarHost = null; calendarProfile = state.profile;
+  }
+  // Reattach the same instance so background refreshes cannot erase a task form
+  // or reset the chosen week/month while navigating between workspace sections.
+  calendarHost?.remove();
+  root.innerHTML = header() + `<main>${state.error ? `<div class="error-banner" role="alert">${esc(state.error)} <button data-action="reload">Reintentar</button></div>` : ''}${state.loading ? '<div class="loading">Preparando tu espacio…</div>' : !state.profile ? loginView() : state.view === 'calendar' ? '<div id="calendar-slot"></div>' : state.view === 'minutes' ? minutesView() : state.view === 'tasks' ? tasksView() : milestonesView()}</main><footer class="app-footer"><span>PDR · Equipo Santa Clara</span><span>Ideas claras. Acuerdos que avanzan.</span></footer>${modalView()}`;
+  const slot = root.querySelector('#calendar-slot');
+  if (slot) {
+    if (!calendarHost) {
+      calendarHost = document.createElement('div');
+      slot.append(calendarHost);
+      disposeCalendar = mountCalendar(calendarHost, state.profile, state.profiles);
+    } else slot.append(calendarHost);
+  }
 }
 function newMinute() {
   const draft = sessionStorage.getItem(`pdr-draft-${state.profile}`);
@@ -231,6 +249,7 @@ root.addEventListener('click', async (event) => {
 });
 
 root.addEventListener('submit', async (event) => {
+  if (!(event.target instanceof HTMLFormElement)) return;
   event.preventDefault();
   if (state.busy) return;
   const form = event.target;

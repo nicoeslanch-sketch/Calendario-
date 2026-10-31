@@ -1,4 +1,4 @@
-import { disableSubscription, saveSubscription } from './store.js';
+import { disableSubscription, saveSubscription } from './calendar-store.js';
 
 function decodePublicKey(base64) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);

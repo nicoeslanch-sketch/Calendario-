@@ -9,6 +9,8 @@ vi.stubGlobal('window', new EventTarget());
 
 let store;
 beforeAll(async () => {
+  vi.stubEnv('VITE_SUPABASE_URL', '');
+  vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
   store = await import('../src/lib/store.js');
 });
 
