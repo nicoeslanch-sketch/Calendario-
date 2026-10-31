@@ -1,7 +1,7 @@
 {
-  "name": "Planner Santa Clara",
-  "short_name": "Santa Clara",
-  "description": "Calendario operativo compartido de Nicolás, Benjamín y Tomás.",
+  "name": "PDR · Minutas y equipo",
+  "short_name": "Espacio PDR",
+  "description": "Minutas automatizadas, tareas e hitos históricos del equipo PDR.",
   "lang": "es-CL",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -15,7 +15,7 @@
     { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    { "name": "Nueva tarea", "short_name": "Nueva", "url": "/?action=new" },
-    { "name": "Ver hoy", "short_name": "Hoy", "url": "/?view=today" }
+    { "name": "Minutas automatizadas", "short_name": "Minutas", "url": "/?view=minutes" },
+    { "name": "Distribución de tareas", "short_name": "Tareas", "url": "/?view=tasks" }
   ]
 }
