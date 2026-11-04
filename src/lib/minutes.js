@@ -1,7 +1,10 @@
+import { normalizePriority } from './priorities.js';
+
 export const STATUS = { sin_iniciar: 'Sin iniciar', iniciada: 'Iniciada', terminada: 'Terminada' };
 
 export function minutePayload(minute, publish) {
-  return { ...minute, analysis: publish ? (minute.analysis || analyzeMinute(minute)) : (minute.analysis || {}), state: publish ? 'published' : 'draft' };
+  const normalized = { ...minute, notes: minute.notes.map((note) => ({ ...note, priority: normalizePriority(note.priority) })) };
+  return { ...normalized, analysis: publish ? (minute.analysis || analyzeMinute(normalized)) : (minute.analysis || {}), state: publish ? 'published' : 'draft' };
 }
 
 export function cleanLine(text) {
@@ -24,7 +27,7 @@ export function analyzeMinute(minute) {
       summary: notes.map((note) => cleanLine(note.text).split(/(?<=[.!?])\s/)[0]).slice(0, 3).join(' · ')
         + (notes.length > 3 ? `\nAdemás, se registraron ${notes.length - 3} puntos adicionales en esta carpeta.` : ''),
       agreements: notes.filter((note) => /(?:^|\s)(acord[oó]|aprobad[oa]|decidi[oó]|definid[oa]|confirmad[oa])(?:\s|[.,;:]|$)/i.test(note.text)).map((note) => note.text),
-      tasks: actions.map((note) => ({ source_id: note.id, title: cleanLine(note.text), assignee: note.assignee || folder.assignee, folder: folder.name })),
+      tasks: actions.map((note) => ({ source_id: note.id, title: cleanLine(note.text), assignee: note.assignee || folder.assignee, folder: folder.name, priority: normalizePriority(note.priority) })),
       count: notes.length,
     };
   }).filter((folder) => folder.count);

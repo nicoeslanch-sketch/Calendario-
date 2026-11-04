@@ -5,6 +5,7 @@ import { analyzeMinute, cleanLine, elapsedSince, minutePayload, STATUS } from '.
 import { mountCalendar } from './main.js';
 import { folderToMilestone, taskCounts } from './lib/milestones.js';
 import { canViewTasks, taskProfiles } from './lib/task-access.js';
+import { PRIORITIES, normalizePriority, sortTasksByPriority } from './lib/priorities.js';
 
 const root = document.querySelector('#app');
 const requestedView = new URLSearchParams(location.search).get('view');
@@ -24,6 +25,7 @@ const firstName = (id) => person(id)?.name.split(' ')[0] || 'Equipo';
 const year = () => Number(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'America/Santiago' }).format(new Date()));
 const avatar = (p) => `<span class="avatar" style="--person:${esc(p?.color || '#2f8659')}">${esc((p?.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join(''))}</span>`;
 const options = (selected) => state.profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === selected ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+const priorityBadge = (value) => { const key = normalizePriority(value); return `<span class="priority-badge priority-${key}"><span aria-hidden="true"></span>Prioridad ${PRIORITIES[key].label.toLocaleLowerCase()}</span>`; };
 
 function toast(message, error = false) {
   const el = document.createElement('div');
@@ -88,18 +90,19 @@ function minutesView() {
     ${list.map(minuteCard).join('')}</section>`;
 }
 function tasksView() {
-  const filtered = state.data.tasks.filter((t) => t.assignee === state.selected && (state.status === 'all' || t.status === state.status) && (t.title + t.folder_name).toLocaleLowerCase().includes(state.search.toLocaleLowerCase()));
+  const filtered = sortTasksByPriority(state.data.tasks.filter((t) => t.assignee === state.selected && (state.status === 'all' || t.status === state.status) && (t.title + t.folder_name).toLocaleLowerCase().includes(state.search.toLocaleLowerCase())));
   const assigned = state.data.tasks.filter((t) => t.assignee === state.selected);
   const visibleProfiles = taskProfiles(state.profiles, state.profile);
   const stats = Object.keys(STATUS).map((s) => [s, assigned.filter((t) => t.status === s).length]);
-  return intro('UN EQUIPO, EL MISMO PANORAMA', 'Distribución de tareas', 'Consulta las tareas a las que tu perfil tiene acceso, con sus estados y carpetas de origen.',
+  return intro('UN EQUIPO, EL MISMO PANORAMA', 'Distribución de tareas', 'Las tareas más importantes primero: prioridad alta, media y baja. Consulta sus estados y carpetas de origen.',
     ['nicolas','benjamin'].includes(state.profile) ? '<button class="button" data-action="add-profile">+ Agregar integrante</button>' : '') +
     `<div class="assignee-tabs" role="tablist" aria-label="Tareas por responsable">${visibleProfiles.map((p) => `<button role="tab" aria-selected="${state.selected === p.id}" data-assignee="${esc(p.id)}" class="${state.selected === p.id ? 'active' : ''}">${avatar(p)}<span>Tareas ${esc(firstName(p.id))}</span><b>${state.data.tasks.filter((t) => t.assignee === p.id && t.status !== 'terminada').length}</b></button>`).join('')}</div>
     <div class="task-stats">${stats.map(([s,n]) => `<button data-status-filter="${s}" class="stat ${s} ${state.status === s ? 'selected' : ''}"><span class="status-dot"></span><strong>${n}</strong><span>${STATUS[s]}</span></button>`).join('')}</div>
     <div class="section-line"><button class="text-button" data-status-filter="all">Ver todos los estados</button><label class="search"><span>⌕</span><input data-search value="${esc(state.search)}" placeholder="Buscar tareas" aria-label="Buscar tareas"></label></div>
+    <div class="priority-legend" aria-label="Orden por prioridad"><span>Ordenadas por prioridad:</span>${Object.keys(PRIORITIES).map(priorityBadge).join('')}</div>
     <section class="task-list">${filtered.length ? filtered.map((t) => {
       const editable = t.assignee === state.profile || t.owner_id === state.profile;
-      return `<article class="assignment ${t.status}">${editable ? trash('assignment', t.id, t.title) : ''}<span class="task-mark">${t.status === 'terminada' ? '✓' : t.status === 'iniciada' ? '◴' : '○'}</span><div class="assignment-body"><div class="task-source"><span>▱ ${esc(t.folder_name)}</span><span>${esc(t.minute_title)}</span></div><h2>${esc(t.title)}</h2><p>${t.started_at ? `<span data-elapsed="${t.started_at}">Inició ${elapsedSince(t.started_at)}</span><span class="exact-time"> · ${date(t.started_at)}</span>` : 'Todavía no iniciada'}${t.completed_at ? ` · Terminada el ${date(t.completed_at)}` : ''}</p><small>Creada por ${esc(person(t.owner_id)?.name)}</small></div>
+      return `<article class="assignment ${t.status} priority-${normalizePriority(t.priority)}">${editable ? trash('assignment', t.id, t.title) : ''}<span class="task-mark">${t.status === 'terminada' ? '✓' : t.status === 'iniciada' ? '◴' : '○'}</span><div class="assignment-body"><div class="task-source"><span>▱ ${esc(t.folder_name)}</span><span>${esc(t.minute_title)}</span>${priorityBadge(t.priority)}</div><h2>${esc(t.title)}</h2><p>${t.started_at ? `<span data-elapsed="${t.started_at}">Inició ${elapsedSince(t.started_at)}</span><span class="exact-time"> · ${date(t.started_at)}</span>` : 'Todavía no iniciada'}${t.completed_at ? ` · Terminada el ${date(t.completed_at)}` : ''}</p><small>Creada por ${esc(person(t.owner_id)?.name)}</small></div>
       <div class="task-control"><label class="sr-only" for="task-${t.id}">Estado de ${esc(t.title)}</label><select id="task-${t.id}" data-task-status="${t.id}" ${editable ? '' : 'disabled'}>${Object.entries(STATUS).map(([v,l]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${editable ? '' : '<small>Solo consulta</small>'}</div></article>`;
     }).join('') : empty('Todo por construir', 'Aquí aparecerán las tareas de este integrante al guardar y distribuir una minuta.', '☑')}</section>`;
 }
@@ -153,7 +156,8 @@ function modalView() {
   return `<div class="overlay"><section class="dialog ${state.modal === 'minute' ? 'notebook' : state.modal === 'milestone' ? 'milestone-editor' : 'compact'}" role="dialog" aria-modal="true" aria-label="${state.modal === 'minute' ? 'Editor de minuta' : state.modal === 'milestone' ? 'Hito histórico' : 'Perfil'}"><button class="dialog-close" data-action="close-modal" aria-label="Cerrar">×</button>${content}</section></div>`;
 }
 function noteCard(note) {
-  return `<article class="point-card" draggable="true" data-note="${note.id}"><span class="grip" aria-hidden="true">⠿</span><textarea data-note-text="${note.id}" aria-label="Editar punto" rows="2" maxlength="2000">${esc(note.text)}</textarea><button type="button" class="trash-button remove-point" data-remove-point="${note.id}" aria-label="Eliminar punto">${trashIcon}</button><div class="point-controls"><label><input type="checkbox" data-actionable="${note.id}" ${note.actionable !== false ? 'checked' : ''}> Crear tarea</label><label class="sr-only" for="move-${note.id}">Mover punto a carpeta</label><select id="move-${note.id}" data-move-note="${note.id}"><option value="">Sin agrupar</option>${state.editor.folders.map((f) => `<option value="${f.id}" ${f.id === note.folder_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div></article>`;
+  const priority = normalizePriority(note.priority);
+  return `<article class="point-card priority-${priority}" draggable="true" data-note="${note.id}"><span class="grip" aria-hidden="true">⠿</span><textarea data-note-text="${note.id}" aria-label="Editar punto" rows="2" maxlength="2000">${esc(note.text)}</textarea><button type="button" class="trash-button remove-point" data-remove-point="${note.id}" aria-label="Eliminar punto">${trashIcon}</button><div class="point-controls"><label><input type="checkbox" data-actionable="${note.id}" ${note.actionable !== false ? 'checked' : ''}> Crear tarea</label><label class="sr-only" for="move-${note.id}">Mover punto a carpeta</label><select id="move-${note.id}" data-move-note="${note.id}"><option value="">Sin agrupar</option>${state.editor.folders.map((f) => `<option value="${f.id}" ${f.id === note.folder_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><label class="note-priority" for="priority-${note.id}"><span class="priority-dot" aria-hidden="true"></span>Prioridad<select id="priority-${note.id}" data-note-priority="${note.id}" ${note.actionable === false ? 'disabled' : ''}>${Object.entries(PRIORITIES).map(([key, p]) => `<option value="${key}" ${key === priority ? 'selected' : ''}>${p.label} · ${p.color}</option>`).join('')}</select></label></div></article>`;
 }
 function minuteEditor() {
   const m = state.editor;
@@ -161,7 +165,7 @@ function minuteEditor() {
   const used = new Set(m.folders.map((f) => f.id));
   return `<div class="notebook-top"><span class="eyebrow">CUADERNO DE REUNIONES</span><span class="private-label">⌑ Privada · ${esc(firstName(state.profile))}</span>${trash('minute', m.id, m.title || 'esta minuta')}</div>
     <input class="minute-title-input" name="minute-title" placeholder="Título de la minuta" maxlength="180" value="${esc(m.title)}" aria-label="Título de la minuta">
-    <div class="notebook-toolbar"><span>Organiza tu punteo en carpetas</span><div><select data-folder-library aria-label="Agregar carpeta existente"><option value="">Mis carpetas guardadas</option>${state.data.folders.filter((f) => !used.has(f.id)).map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select><button class="button small" data-action="toggle-folder-form">+ Agregar carpeta</button></div></div>
+    <div class="notebook-toolbar"><span>Organiza tu punteo en carpetas y elige la prioridad de cada tarea.</span><div><select data-folder-library aria-label="Agregar carpeta existente"><option value="">Mis carpetas guardadas</option>${state.data.folders.filter((f) => !used.has(f.id)).map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select><button class="button small" data-action="toggle-folder-form">+ Agregar carpeta</button></div></div>
     ${folderLibrary()}
     <form id="folder-form" class="folder-form" hidden><label>Nombre de carpeta<input name="name" required maxlength="100" placeholder="Ej.: Evento de fin de año"></label><label>Responsable<select name="assignee">${options(state.profile)}</select></label><button class="button primary small">Crear carpeta</button></form>
     <div class="notebook-workspace"><section class="capture-column" data-drop-folder=""><h3>Puntos de la reunión <span>${loose.length}</span></h3><p class="hint">Enter crea una tarjeta. Shift + Enter permite seguir escribiendo. Arrástrala a una carpeta o usa su selector.</p><textarea id="point-input" placeholder="Escribe una idea, acuerdo o pendiente…" aria-label="Nuevo punto de la minuta" rows="5" maxlength="20000">${esc(m.pendingText || '')}</textarea><button class="button small add-point" data-action="add-point">+ Añadir punto</button><div class="loose-points">${loose.map(noteCard).join('')}</div></section>
@@ -184,7 +188,7 @@ function addPoints() {
   if (state.editor.notes.length + lines.length > 300) throw new Error('Una minuta admite hasta 300 puntos.');
   if (!lines.length) return;
   state.editor.pendingText = '';
-  state.editor.notes.push(...lines.map((text) => ({ id: uuid(), text, folder_id: '', actionable: true })));
+  state.editor.notes.push(...lines.map((text) => ({ id: uuid(), text, folder_id: '', actionable: true, priority: 'media' })));
   invalidate();
   render();
   document.querySelector('#point-input')?.focus();
@@ -323,7 +327,11 @@ root.addEventListener('change', async (event) => {
     if (input.dataset.hitoTaskState) { state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskState).completed = input.value === 'done'; render(); }
     if (input.dataset.moveNote) { state.editor.notes.find((n) => n.id === input.dataset.moveNote).folder_id = input.value; invalidate(); render(); }
     if (input.dataset.folderOwner) { state.editor.folders.find((f) => f.id === input.dataset.folderOwner).assignee = input.value; invalidate(); }
-    if (input.dataset.actionable) { state.editor.notes.find((n) => n.id === input.dataset.actionable).actionable = input.checked; invalidate(); }
+    if (input.dataset.actionable) { state.editor.notes.find((n) => n.id === input.dataset.actionable).actionable = input.checked; invalidate(); render(); }
+    if (input.dataset.notePriority) {
+      state.editor.notes.find((n) => n.id === input.dataset.notePriority).priority = normalizePriority(input.value);
+      invalidate(); render(); document.querySelector(`[data-note-priority="${input.dataset.notePriority}"]`)?.focus();
+    }
     if (input.hasAttribute('data-folder-library') && input.value) {
       const f = state.data.folders.find((f) => f.id === input.value);
       state.editor.folders.push({ id: f.id, name: f.name, assignee: f.assignee }); invalidate(); render();
