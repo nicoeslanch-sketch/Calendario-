@@ -1,3 +1,4 @@
+import { confirmDelete } from './lib/confirm.js';
 import calendarStyles from './styles.css?raw';
 import {
   addDays, addMonths, birthdayISO, chileToday, deadlineState, endOfWeek,
@@ -329,6 +330,9 @@ function quickForm(today) {
   </form>`;
 }
 
+function deleteButton(kind, id, label) {
+  return `<button type="button" class="record-trash" data-delete-${kind}="${id}" aria-label="Eliminar ${escapeHTML(label)}" title="Eliminar ${escapeHTML(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/></svg></button>`;
+}
 function taskRow(task, { showDate = false } = {}) {
   const status = deadlineState(task);
   const category = CATEGORY[task.category] || CATEGORY.otro;
@@ -358,7 +362,7 @@ function weekDay(iso) {
   return `<section class="week-day ${iso === chileToday() ? 'today' : ''}" data-drop-date="${iso}">
     <div class="week-day-head"><div><span class="day">${escapeHTML(formatShortDay(iso))}</span><span class="number">${Number(iso.slice(-2))}</span></div><span class="load" style="--load-color:${color}">${load}% ${label}</span></div>
     <div class="loadbar" style="--load-color:${color}"><i style="width:${load}%"></i></div>
-    ${tasks.map((task) => `<button class="week-task ${task.completed ? 'completed' : ''}" style="--task-color:${(CATEGORY[task.category] || CATEGORY.otro)[1]}" draggable="true" data-task-id="${task.id}" data-open-task="${task.id}">${escapeHTML(task.title)}<span>${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</span></button>`).join('') || '<div class="empty">Sin tareas</div>'}
+    ${tasks.map((task) => `<div class="week-task-wrap">${deleteButton('task',task.id,task.title)}<button class="week-task ${task.completed ? 'completed' : ''}" style="--task-color:${(CATEGORY[task.category] || CATEGORY.otro)[1]}" draggable="true" data-task-id="${task.id}" data-open-task="${task.id}">${escapeHTML(task.title)}<span>${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</span></button></div>`).join('') || '<div class="empty">Sin tareas</div>'}
     ${birthdays.length ? `<div class="week-bday">🎂 ${birthdays.map((birthday) => escapeHTML(birthday.name)).join(', ')}</div>` : ''}
   </section>`;
 }
@@ -385,7 +389,7 @@ function dayPanel(iso) {
   const birthdays = birthdayByDate(iso);
   const load = dayLoad(iso);
   const [label, color] = loadMeta(load);
-  return `<aside class="card day-panel"><div class="card-head"><h2>Detalle del día</h2><button class="button small primary" data-action="new-task" data-date="${iso}">+ Tarea</button></div><div class="day-panel-body"><h2>${escapeHTML(formatLongDate(iso))}</h2><div class="task-meta" style="color:${color}">${load}% · carga ${label}</div>${birthdays.map((birthday) => `<div class="birthday-notice" style="margin-top:10px"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}${tasks.map((task) => `<div class="day-panel-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-panel-task-content" data-open-task="${task.id}"><b>${escapeHTML(task.title)}</b><div class="task-meta">${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</div></button><span aria-hidden="true">›</span></div>`).join('') || '<div class="empty">Sin tareas</div>'}</div></aside>`;
+  return `<aside class="card day-panel"><div class="card-head"><h2>Detalle del día</h2><button class="button small primary" data-action="new-task" data-date="${iso}">+ Tarea</button></div><div class="day-panel-body"><h2>${escapeHTML(formatLongDate(iso))}</h2><div class="task-meta" style="color:${color}">${load}% · carga ${label}</div>${birthdays.map((birthday) => `<div class="birthday-notice" style="margin-top:10px"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}${tasks.map((task) => `<div class="day-panel-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-panel-task-content" data-open-task="${task.id}"><b>${escapeHTML(task.title)}</b><div class="task-meta">${task.deadline_time ? `Tope ${task.deadline_time.slice(0, 5)} · ` : ''}${PERSON[task.responsible]}</div></button>${deleteButton('task',task.id,task.title)}</div>`).join('') || '<div class="empty">Sin tareas</div>'}</div></aside>`;
 }
 
 function renderSecondaryTasks() {
@@ -480,7 +484,7 @@ function renderProjects() {
 function projectCard(project) {
   const priority = PROJECT_PRIORITY[project.priority] || PROJECT_PRIORITY.amarillo;
   return `<article class="card project-card priority-${project.priority} ${project.status === 'completado' ? 'completed' : ''}">
-    <div class="project-card-head"><span class="project-light" style="--project-color:${priority.color}"></span><span class="pill project-priority ${project.priority}">${priority.label}</span><span class="pill project-status">${escapeHTML(PROJECT_STATUS[project.status] || project.status)}</span></div>
+    <div class="project-card-head"><span class="project-light" style="--project-color:${priority.color}"></span><span class="pill project-priority ${project.priority}">${priority.label}</span><span class="pill project-status">${escapeHTML(PROJECT_STATUS[project.status] || project.status)}</span>${deleteButton('project',project.id,project.idea)}</div>
     <h2>${escapeHTML(project.idea)}</h2>
     <p class="project-description">${escapeHTML(project.description || 'Sin descripción.')}</p>
     <dl class="project-details">
@@ -491,7 +495,7 @@ function projectCard(project) {
     <div class="project-card-actions">
       <label>Estado<select data-project-status="${project.id}">${Object.entries(PROJECT_STATUS).map(([value, label]) => `<option value="${value}" ${project.status === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <button class="button small" data-edit-project="${project.id}">Editar</button>
-      <button class="button small danger" data-delete-project="${project.id}">Eliminar</button>
+
     </div>
     ${project.priority === 'rojo' && project.status !== 'completado' ? '<div class="project-alert-note">🔔 Alerta diaria activa · 09:00</div>' : ''}
   </article>`;
@@ -499,7 +503,7 @@ function projectCard(project) {
 
 function renderHistory() {
   const list = state.history.filter(visible);
-  return `${viewHeader('Completadas recientemente')}<div class="history-controls"><select class="button" data-history-days><option value="7" ${state.historyDays === 7 ? 'selected' : ''}>Últimos 7 días</option><option value="30" ${state.historyDays === 30 ? 'selected' : ''}>Últimos 30 días</option></select></div><section class="card history-list">${list.length ? list.map((task) => `<article class="task-row completed" data-open-task="${task.id}"><span class="check">✓</span><div><div class="task-title">${escapeHTML(task.title)}</div><div class="task-meta">${task.is_secondary ? 'Tarea secundaria' : 'Tarea'} · ${PERSON[task.responsible]} · ${escapeHTML(formatLongDate(task.date))}</div></div><div class="relative completed">${escapeHTML(relativeDeadline(task))}</div></article>`).join('') : '<div class="empty">No hay tareas completadas en este período.</div>'}</section>`;
+  return `${viewHeader('Completadas recientemente')}<div class="history-controls"><select class="button" data-history-days><option value="7" ${state.historyDays === 7 ? 'selected' : ''}>Últimos 7 días</option><option value="30" ${state.historyDays === 30 ? 'selected' : ''}>Últimos 30 días</option></select></div><section class="card history-list">${list.length ? list.map((task) => taskRow(task,{showDate:true})).join('') : '<div class="empty">No hay tareas completadas en este período.</div>'}</section>`;
 }
 
 function renderBirthdays() {
@@ -509,7 +513,7 @@ function renderBirthdays() {
 
 function birthdayCard(birthday) {
   const iso = birthdayISO(birthday, new Date().getFullYear());
-  return `<article class="card birthday-card"><span class="cake">🎂</span><div><b>${escapeHTML(birthday.name)}</b><small>${Number(iso.slice(-2))} de ${new Intl.DateTimeFormat('es-CL', { month: 'long' }).format(new Date(`${iso}T12:00:00`))}${birthday.description ? ` · ${escapeHTML(birthday.description)}` : ''}</small></div><div class="actions"><button class="button small" data-edit-birthday="${birthday.id}">Editar</button><button class="button small danger" data-delete-birthday="${birthday.id}">×</button></div></article>`;
+  return `<article class="card birthday-card"><span class="cake">🎂</span><div><b>${escapeHTML(birthday.name)}</b><small>${Number(iso.slice(-2))} de ${new Intl.DateTimeFormat('es-CL', { month: 'long' }).format(new Date(`${iso}T12:00:00`))}${birthday.description ? ` · ${escapeHTML(birthday.description)}` : ''}</small></div><div class="actions"><button class="button small" data-edit-birthday="${birthday.id}">Editar</button>${deleteButton('birthday',birthday.id,birthday.name)}</div></article>`;
 }
 
 function personOptions(selected = 'ambos') {
@@ -545,7 +549,7 @@ function projectModal(project = {}) {
   const status = project.status || 'sin_iniciar';
   const priority = project.priority || 'amarillo';
   return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true" aria-labelledby="project-modal-title"><form id="project-form">
-    <div class="modal-head"><div><span class="eyebrow">Portafolio de iniciativas</span><h2 id="project-modal-title">${isNew ? 'Nuevo proyecto' : 'Editar proyecto'}</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+    <div class="modal-head"><div><span class="eyebrow">Portafolio de iniciativas</span><h2 id="project-modal-title">${isNew ? 'Nuevo proyecto' : 'Editar proyecto'}</h2></div>${!isNew ? deleteButton('project',project.id,project.idea) : ''}<button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
     <div class="modal-body"><div class="form-grid">
       <div class="field wide"><label>Idea / nombre del proyecto</label><input name="idea" required maxlength="180" value="${escapeHTML(project.idea || '')}" placeholder="Ej. Automatizar seguimiento comercial" autofocus></div>
       <div class="field wide"><label>Descripción del proyecto</label><textarea name="description" maxlength="4000" placeholder="Qué se quiere construir o cambiar">${escapeHTML(project.description || '')}</textarea></div>
@@ -556,7 +560,7 @@ function projectModal(project = {}) {
       <div class="field"><label>Prioridad / semáforo</label><select name="priority"><option value="rojo" ${priority === 'rojo' ? 'selected' : ''}>🔴 Alta</option><option value="amarillo" ${priority === 'amarillo' ? 'selected' : ''}>🟡 Media</option><option value="verde" ${priority === 'verde' ? 'selected' : ''}>🟢 Baja</option></select></div>
       <div class="project-reminder-info"><b>Alertas automáticas</b><span>Los proyectos rojos sin completar enviarán un aviso diario a las 09:00 al responsable.</span></div>
     </div></div>
-    <div class="modal-actions">${!isNew ? `<button type="button" class="button danger" data-delete-project="${project.id}">Eliminar</button>` : ''}<button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar proyecto</button></div>
+    <div class="modal-actions"><button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar proyecto</button></div>
   </form></section></div>`;
 }
 
@@ -565,7 +569,7 @@ function dayModal(iso) {
   const birthdays = birthdayByDate(iso);
   return `<div class="modal-backdrop" data-close-modal><section class="modal day-modal" role="dialog" aria-modal="true" aria-labelledby="day-modal-title">
     <div class="modal-head"><div><span class="eyebrow">Tareas del día</span><h2 id="day-modal-title">${escapeHTML(formatLongDate(iso))}</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
-    <div class="modal-body">${birthdays.map((birthday) => `<div class="birthday-notice"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}<div class="day-modal-list">${tasks.map((task) => `<article class="day-modal-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-modal-task-content" data-open-task="${task.id}"><span class="responsible-dot" style="background:${(CATEGORY[task.category] || CATEGORY.otro)[1]}"></span><span><b>${escapeHTML(task.title)}</b><small>${task.deadline_time ? `Tope ${escapeHTML(task.deadline_time.slice(0, 5))} · ` : ''}${PERSON[task.responsible]}</small></span><span aria-hidden="true">›</span></button></article>`).join('') || '<div class="empty">No hay tareas para este día.</div>'}</div></div>
+    <div class="modal-body">${birthdays.map((birthday) => `<div class="birthday-notice"><span>🎂</span><b>${escapeHTML(birthday.name)}</b></div>`).join('')}<div class="day-modal-list">${tasks.map((task) => `<article class="day-modal-task ${task.completed ? 'completed' : ''}"><button class="check" data-toggle-task="${task.id}" aria-label="${task.completed ? 'Desmarcar' : 'Completar'} ${escapeHTML(task.title)}">✓</button><button class="day-modal-task-content" data-open-task="${task.id}"><span class="responsible-dot" style="background:${(CATEGORY[task.category] || CATEGORY.otro)[1]}"></span><span><b>${escapeHTML(task.title)}</b><small>${task.deadline_time ? `Tope ${escapeHTML(task.deadline_time.slice(0, 5))} · ` : ''}${PERSON[task.responsible]}</small></span><span aria-hidden="true">›</span></button>${deleteButton('task',task.id,task.title)}</article>`).join('') || '<div class="empty">No hay tareas para este día.</div>'}</div></div>
     <div class="modal-actions"><button class="button push-right primary" type="button" data-action="new-task" data-date="${iso}">+ Nueva tarea</button></div>
   </section></div>`;
 }
@@ -576,7 +580,7 @@ function taskModal(task = {}) {
   const recurrence = task.recurrence_rule || { frequency: 'none' };
   const subtasks = task.subtasks || [];
   return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><form id="task-form"><input type="hidden" name="is_secondary" value="${isSecondary}">
-    <div class="modal-head"><h2 id="modal-title">${isNew ? 'Nueva' : 'Editar'} tarea${isSecondary ? ' secundaria' : ''}</h2><button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+    <div class="modal-head"><h2 id="modal-title">${isNew ? 'Nueva' : 'Editar'} tarea${isSecondary ? ' secundaria' : ''}</h2>${!isNew ? deleteButton('task',task.id,task.title) : ''}<button class="modal-close" type="button" data-close-modal aria-label="Cerrar">×</button></div>
     <div class="modal-body"><div class="form-grid">
       <div class="field wide"><label>Título</label><input name="title" required maxlength="160" value="${escapeHTML(task.title || '')}" autofocus></div>
       <div class="field wide"><label>Descripción</label><textarea name="description" maxlength="2000">${escapeHTML(task.description || '')}</textarea></div>
@@ -594,12 +598,12 @@ function taskModal(task = {}) {
       <div class="field wide"><label>Días de la semana</label><div class="weekdays">${['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((label, index) => `<label><input type="checkbox" name="weekday" value="${index + 1}" ${(recurrence.weekdays || []).includes(index + 1) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>`}
       <div class="field wide"><label>Subtareas</label><div class="subtasks" id="subtasks">${subtasks.map((subtask) => subtaskInput(subtask)).join('')}</div><button class="button small" type="button" data-action="add-subtask">+ Subtarea</button></div>
     </div>${!isNew ? `<div class="snooze"><p>Recordar más tarde en este dispositivo:</p>${[10, 20, 30, 60].map((minutes) => `<button type="button" class="button small" data-snooze="${minutes}" data-task="${task.id}">${minutes === 60 ? '1 hora' : `${minutes} min`}</button>`).join('')}</div>` : ''}</div>
-    <div class="modal-actions">${!isNew ? `<button type="button" class="button danger" data-delete-task="${task.id}">Eliminar</button><button type="button" class="button" data-duplicate-task="${task.id}">Duplicar</button>` : ''}<button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar</button></div>
+    <div class="modal-actions">${!isNew ? `<button type="button" class="button" data-duplicate-task="${task.id}">Duplicar</button>` : ''}<button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar</button></div>
   </form></section></div>`;
 }
 
 function subtaskInput(subtask = {}) {
-  return `<div class="subtask-input"><input type="checkbox" class="subtask-check" ${subtask.completed ? 'checked' : ''} data-subtask-id="${subtask.id || ''}"><input type="text" class="subtask-title" maxlength="200" value="${escapeHTML(subtask.title || '')}" placeholder="Detalle de la tarea"><button class="button small danger" type="button" data-remove-subtask>×</button></div>`;
+  return `<div class="subtask-input"><input type="checkbox" class="subtask-check" ${subtask.completed ? 'checked' : ''} data-subtask-id="${subtask.id || ''}"><input type="text" class="subtask-title" maxlength="200" value="${escapeHTML(subtask.title || '')}" placeholder="Detalle de la tarea"><button class="record-trash" type="button" data-remove-subtask aria-label="Eliminar subtarea"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Z"/></svg></button></div>`;
 }
 
 function notificationModal() {
@@ -610,7 +614,7 @@ function notificationModal() {
 
 function birthdayModal(birthday) {
   const year = new Date().getFullYear();
-  return `<div class="modal-backdrop" data-close-modal><section class="modal"><form id="birthday-edit-form"><div class="modal-head"><h2>Editar cumpleaños</h2><button class="modal-close" data-close-modal>×</button></div><div class="modal-body"><div class="form-grid"><div class="field wide"><label>Nombre</label><input name="name" required maxlength="120" value="${escapeHTML(birthday.name)}"></div><div class="field"><label>Fecha</label><input name="date" type="date" required value="${birthdayISO(birthday, year)}"></div><div class="field"><label>Descripción</label><input name="description" maxlength="200" value="${escapeHTML(birthday.description || '')}"></div></div></div><div class="modal-actions"><button type="button" class="button" data-close-modal>Cancelar</button><button class="button primary push-right">Guardar</button></div></form></section></div>`;
+  return `<div class="modal-backdrop" data-close-modal><section class="modal"><form id="birthday-edit-form"><div class="modal-head"><h2>Editar cumpleaños</h2>${deleteButton('birthday',birthday.id,birthday.name)}<button class="modal-close" data-close-modal>×</button></div><div class="modal-body"><div class="form-grid"><div class="field wide"><label>Nombre</label><input name="name" required maxlength="120" value="${escapeHTML(birthday.name)}"></div><div class="field"><label>Fecha</label><input name="date" type="date" required value="${birthdayISO(birthday, year)}"></div><div class="field"><label>Descripción</label><input name="description" maxlength="200" value="${escapeHTML(birthday.description || '')}"></div></div></div><div class="modal-actions"><button type="button" class="button" data-close-modal>Cancelar</button><button class="button primary push-right">Guardar</button></div></form></section></div>`;
 }
 
 function taskFromForm(form) {
@@ -651,7 +655,7 @@ async function withBusy(element, operation) {
   finally { if (element) element.disabled = false; }
 }
 
-document.addEventListener('click', (event) => {
+document.addEventListener('click', async (event) => {
   const person = event.target.closest('[data-person]')?.dataset.person;
   if (person) { state.person = person; localStorage.setItem('pdr-person', person); render(); return; }
   const view = event.target.closest('[data-view]')?.dataset.view;
@@ -663,7 +667,7 @@ document.addEventListener('click', (event) => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action) handleAction(action, event.target.closest('[data-action]'));
   const toggleId = event.target.closest('[data-toggle-task]')?.dataset.toggleTask;
-  if (toggleId) { event.preventDefault(); event.stopPropagation(); const task = state.tasks.find((item) => item.id === toggleId); const wasCompleted = task.completed; withBusy(event.target, async () => { await toggleTask(task); toast(wasCompleted ? 'Tarea desmarcada' : 'Tarea completada'); await refresh({ quiet: true }); }); return; }
+  if (toggleId) { event.preventDefault(); event.stopPropagation(); const task = state.tasks.find((item) => item.id === toggleId) || state.history.find((item) => item.id === toggleId); const wasCompleted = task.completed; withBusy(event.target, async () => { await toggleTask(task); toast(wasCompleted ? 'Tarea desmarcada' : 'Tarea completada'); await refresh({ quiet: true }); }); return; }
   const deleteId = event.target.closest('[data-delete-task]')?.dataset.deleteTask;
   if (deleteId) { event.preventDefault(); event.stopPropagation(); removeTask(deleteId, event.target.closest('[data-delete-task]')); return; }
   const openId = event.target.closest('[data-open-task]')?.dataset.openTask;
@@ -675,7 +679,7 @@ document.addEventListener('click', (event) => {
   const editBirthdayId = event.target.closest('[data-edit-birthday]')?.dataset.editBirthday;
   if (editBirthdayId) { state.modal = { type: 'birthday', birthday: state.birthdays.find((item) => item.id === editBirthdayId) }; render(); return; }
   const deleteBirthdayId = event.target.closest('[data-delete-birthday]')?.dataset.deleteBirthday;
-  if (deleteBirthdayId) removeBirthday(deleteBirthdayId, event.target);
+  if (deleteBirthdayId) { event.preventDefault(); event.stopPropagation(); removeBirthday(deleteBirthdayId, event.target.closest('[data-delete-birthday]')); return; }
   const editProjectId = event.target.closest('[data-edit-project]')?.dataset.editProject;
   if (editProjectId) { state.modal = { type: 'project', project: state.projects.find((item) => item.id === editProjectId) }; render(); return; }
   const deleteProjectId = event.target.closest('[data-delete-project]')?.dataset.deleteProject;
@@ -683,7 +687,7 @@ document.addEventListener('click', (event) => {
   const snooze = event.target.closest('[data-snooze]');
   if (snooze) withBusy(snooze, async () => { await snoozeTask(snooze.dataset.task, Number(snooze.dataset.snooze)); toast('Recordatorio programado', `Te avisaremos en ${snooze.dataset.snooze} minutos.`); });
   if (event.target.matches('[data-close-modal]') && (event.target.classList.contains('modal-backdrop') || !event.target.closest('.modal-body'))) { state.modal = null; render(); }
-  if (event.target.closest('[data-remove-subtask]')) event.target.closest('.subtask-input').remove();
+  if (event.target.closest('[data-remove-subtask]') && await confirmDelete('¿Estás seguro de que quieres eliminar esta subtarea? Se aplicará al guardar la tarea.')) event.target.closest('.subtask-input').remove();
 });
 
 function handleAction(action, element) {
@@ -812,7 +816,7 @@ function submitNotifications(form) {
 }
 
 async function removeTask(id, button) {
-  if (!confirm('¿Eliminar esta tarea? Esta acción no se puede deshacer.')) return;
+  if (!await confirmDelete('¿Estás seguro de que quieres eliminar esta tarea? Esta acción no se puede deshacer.')) return;
   await withBusy(button, async () => { await deleteTask(id); state.modal = null; toast('Tarea eliminada'); await refresh({ quiet: true }); });
 }
 
@@ -822,12 +826,12 @@ async function copyTask(id, button) {
 }
 
 async function removeBirthday(id, button) {
-  if (!confirm('¿Eliminar este cumpleaños?')) return;
-  await withBusy(button, async () => { await deleteBirthday(id); toast('Cumpleaños eliminado'); await refresh({ quiet: true }); });
+  if (!await confirmDelete('¿Estás seguro de que quieres eliminar este cumpleaños del calendario compartido?')) return;
+  await withBusy(button, async () => { await deleteBirthday(id); state.modal = null; toast('Cumpleaños eliminado'); await refresh({ quiet: true }); });
 }
 
 async function removeProject(id, button) {
-  if (!confirm('¿Eliminar este proyecto? Esta acción no se puede deshacer.')) return;
+  if (!await confirmDelete('¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.')) return;
   await withBusy(button, async () => {
     await deleteProject(id);
     state.modal = null;
