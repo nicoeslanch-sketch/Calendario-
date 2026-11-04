@@ -1,9 +1,10 @@
 import { confirmDelete } from './lib/confirm.js';
 import './workspace.css';
 import { login, logout, profiles, request, session } from './lib/workspace-store.js';
-import { analyzeMinute, cleanLine, elapsedSince, STATUS } from './lib/minutes.js';
+import { analyzeMinute, cleanLine, elapsedSince, minutePayload, STATUS } from './lib/minutes.js';
 import { mountCalendar } from './main.js';
 import { folderToMilestone, taskCounts } from './lib/milestones.js';
+import { canViewTasks, taskProfiles } from './lib/task-access.js';
 
 const root = document.querySelector('#app');
 const requestedView = new URLSearchParams(location.search).get('view');
@@ -49,7 +50,8 @@ async function refresh({ silent = false } = {}) {
   try {
     const data = await request('load');
     if (token !== session?.token) return;
-    state.data = data;
+    state.data = { ...data, tasks: data.tasks.filter((t) => canViewTasks(state.profile, t.assignee)) };
+    if (!canViewTasks(state.profile, state.selected)) state.selected = state.profile;
     state.error = '';
   } catch (error) {
     if (token !== session?.token) return;
@@ -88,10 +90,11 @@ function minutesView() {
 function tasksView() {
   const filtered = state.data.tasks.filter((t) => t.assignee === state.selected && (state.status === 'all' || t.status === state.status) && (t.title + t.folder_name).toLocaleLowerCase().includes(state.search.toLocaleLowerCase()));
   const assigned = state.data.tasks.filter((t) => t.assignee === state.selected);
+  const visibleProfiles = taskProfiles(state.profiles, state.profile);
   const stats = Object.keys(STATUS).map((s) => [s, assigned.filter((t) => t.status === s).length]);
-  return intro('UN EQUIPO, EL MISMO PANORAMA', 'Distribución de tareas', 'Consulta el avance del equipo. Las tareas nacen de las minutas guardadas y conservan su carpeta de origen.',
+  return intro('UN EQUIPO, EL MISMO PANORAMA', 'Distribución de tareas', 'Consulta las tareas a las que tu perfil tiene acceso, con sus estados y carpetas de origen.',
     ['nicolas','benjamin'].includes(state.profile) ? '<button class="button" data-action="add-profile">+ Agregar integrante</button>' : '') +
-    `<div class="assignee-tabs" role="tablist" aria-label="Tareas por responsable">${state.profiles.map((p) => `<button role="tab" aria-selected="${state.selected === p.id}" data-assignee="${esc(p.id)}" class="${state.selected === p.id ? 'active' : ''}">${avatar(p)}<span>Tareas ${esc(firstName(p.id))}</span><b>${state.data.tasks.filter((t) => t.assignee === p.id && t.status !== 'terminada').length}</b></button>`).join('')}</div>
+    `<div class="assignee-tabs" role="tablist" aria-label="Tareas por responsable">${visibleProfiles.map((p) => `<button role="tab" aria-selected="${state.selected === p.id}" data-assignee="${esc(p.id)}" class="${state.selected === p.id ? 'active' : ''}">${avatar(p)}<span>Tareas ${esc(firstName(p.id))}</span><b>${state.data.tasks.filter((t) => t.assignee === p.id && t.status !== 'terminada').length}</b></button>`).join('')}</div>
     <div class="task-stats">${stats.map(([s,n]) => `<button data-status-filter="${s}" class="stat ${s} ${state.status === s ? 'selected' : ''}"><span class="status-dot"></span><strong>${n}</strong><span>${STATUS[s]}</span></button>`).join('')}</div>
     <div class="section-line"><button class="text-button" data-status-filter="all">Ver todos los estados</button><label class="search"><span>⌕</span><input data-search value="${esc(state.search)}" placeholder="Buscar tareas" aria-label="Buscar tareas"></label></div>
     <section class="task-list">${filtered.length ? filtered.map((t) => {
@@ -168,9 +171,11 @@ function minuteEditor() {
 }
 function milestoneEditor() {
   const h = state.editor;
-  return `<form id="milestone-form"><div class="editor-record-actions">${trash('milestone', h.id || 'draft', h.title || 'este hito')}</div><span class="eyebrow">MEMORIA DEL EQUIPO · TU HISTORIAL PRIVADO</span><h2>${h.id ? 'Editar hito histórico' : 'Crear un hito histórico'}</h2><p>Deja una guía que te sirva cuando vuelvas a organizarlo.</p>
-    <div class="form-grid"><label class="wide">Título del evento o hito<input name="title" required maxlength="180" value="${esc(h.title)}" placeholder="Ej.: Encuentro anual del equipo"></label><label>Año<input type="number" name="year" required min="2000" max="2200" value="${h.year}"></label><label class="wide">Para qué se realiza<textarea name="purpose" rows="2" maxlength="10000">${esc(h.purpose)}</textarea></label><label class="wide">Directrices y criterios<textarea name="guidelines" rows="4" maxlength="20000" placeholder="Objetivo, público, requisitos y criterios que se deben respetar…">${esc(h.guidelines)}</textarea></label><label class="wide">Planificación y pasos a seguir<textarea name="plan" rows="5" maxlength="20000" placeholder="Actividades, recursos, contactos internos, pasos y tiempos de preparación…">${esc(h.plan)}</textarea></label><label class="wide">Aprendizajes para otros años<textarea name="learnings" rows="4" maxlength="20000" placeholder="Qué funcionó, qué cambiar y qué recordar la próxima vez…">${esc(h.learnings)}</textarea></label></div>
-    ${hitoTasksEditor(h)}<div class="form-actions"><button type="button" class="button" data-action="close-modal">Cerrar</button><button class="button primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Guardando…' : 'Guardar hito histórico'}</button></div></form>`;
+  return `<form id="milestone-form"><div class="editor-record-actions">${trash('milestone', h.id || 'draft', h.title || 'este hito')}</div><span class="eyebrow">MEMORIA DEL EQUIPO · TU HISTORIAL PRIVADO</span><h2>${h.id ? 'Editar hito histórico' : 'Crear un hito histórico'}</h2><p>Tu referencia para repetirlo el próximo año: qué se hizo, qué queda y qué conviene recordar.</p>
+    <div class="hito-identity"><label>Título del evento o hito<input name="title" required maxlength="180" value="${esc(h.title)}" placeholder="Ej.: Encuentro anual del equipo"></label><label>Año<input type="number" name="year" required min="2000" max="2200" value="${h.year}"></label></div>
+    ${hitoTasksEditor(h)}
+    <div class="form-grid hito-background"><label class="wide">Para qué se realiza<textarea name="purpose" rows="2" maxlength="10000">${esc(h.purpose)}</textarea></label><label class="wide">Directrices y criterios<textarea name="guidelines" rows="4" maxlength="20000" placeholder="Objetivo, público, requisitos y criterios que se deben respetar…">${esc(h.guidelines)}</textarea></label><label class="wide">Planificación y pasos a seguir<textarea name="plan" rows="5" maxlength="20000" placeholder="Actividades, recursos, contactos internos, pasos y tiempos de preparación…">${esc(h.plan)}</textarea></label><label class="wide">Aprendizajes para otros años<textarea name="learnings" rows="4" maxlength="20000" placeholder="Qué funcionó, qué cambiar y qué recordar la próxima vez…">${esc(h.learnings)}</textarea></label></div>
+    <div class="form-actions"><button type="button" class="button" data-export-hito="">↓ Descargar PDF</button><button type="button" class="button" data-action="close-modal">Cerrar</button><button class="button primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Guardando…' : 'Guardar hito histórico'}</button></div></form>`;
 }
 function addPoints() {
   const input = document.querySelector('#point-input');
@@ -200,14 +205,10 @@ async function saveMinute(publish) {
   if (pending) addPoints();
   const m = state.editor;
   if (!m.title.trim()) throw new Error('Ponle un título a la minuta.');
-  if (publish && !m.analysis) {
-    m.analysis = analyzeMinute(m); render();
-    toast('Revisa el resumen y los responsables; después pulsa Guardar minuta y distribuir.');
-    return;
-  }
+  const payload = minutePayload(m, publish);
   state.busy = true; render();
   try {
-    await request('save_minute', { ...m, analysis: m.analysis || {}, state: publish ? 'published' : 'draft' });
+    await request('save_minute', payload);
     sessionStorage.removeItem(`pdr-draft-${state.profile}`);
     state.modal = null; state.editor = null;
     if (publish) { state.view = 'tasks'; state.selected = state.profile; }
@@ -232,7 +233,7 @@ root.addEventListener('click', async (event) => {
     }
     if (target.dataset.view) { state.view = target.dataset.view; state.search = ''; render(); return; }
     if (target.dataset.minute) { openMinute(target.dataset.minute); return; }
-    if (target.dataset.assignee) { state.selected = target.dataset.assignee; state.search = ''; state.status = 'all'; render(); return; }
+    if (target.dataset.assignee && canViewTasks(state.profile, target.dataset.assignee)) { state.selected = target.dataset.assignee; state.search = ''; state.status = 'all'; render(); return; }
     if (target.dataset.statusFilter) { state.status = target.dataset.statusFilter; render(); return; }
     if (target.dataset.milestone || target.dataset.reuse) {
       state.editor = structuredClone(state.data.milestones.find((h) => h.id === (target.dataset.milestone || target.dataset.reuse)));
@@ -251,7 +252,7 @@ root.addEventListener('click', async (event) => {
     if (action === 'close-modal') closeModal();
     if (action === 'add-profile') { state.modal = 'profile'; render(); }
     if (action === 'new-milestone') { state.modal = 'milestone'; state.returnMinute = null; state.editor = { title: '', year: year(), purpose: '', guidelines: '', plan: '', learnings: '', tasks: [] }; render(); }
-    if (action === 'add-hito-task') addHitoTask();
+    if (target.hasAttribute('data-export-hito')) { await exportHito(target.dataset.exportHito); return; }
     if (action === 'toggle-folder-form') { const form = document.querySelector('#folder-form'); form.hidden = !form.hidden; if (!form.hidden) form.querySelector('input').focus(); }
     if (action === 'add-point') addPoints();
     if (action === 'analyze') { addPoints(); state.editor.analysis = analyzeMinute(state.editor); rememberDraft(); render(); document.querySelector('.analysis')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -277,7 +278,7 @@ root.addEventListener('submit', async (event) => {
       state.editor.folders.push({ id: folder.id, name: folder.name, assignee: folder.assignee });
       invalidate(); render();
     } else if (form.id === 'milestone-form') {
-      addHitoTask(false);
+
       await request('save_milestone', { ...state.editor, ...data, year: Number(data.year) });
       if (state.returnMinute) { state.editor = state.returnMinute; state.returnMinute = null; state.modal = 'minute'; }
       else { state.modal = null; state.editor = null; }
@@ -295,7 +296,16 @@ root.addEventListener('input', (event) => {
     if (['title','purpose','guidelines','plan','learnings'].includes(input.name)) state.editor[input.name] = input.value;
     if (input.name === 'year') state.editor.year = Number(input.value);
     if (input.dataset.hitoTaskText) state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskText).title = input.value;
-    if (input.id === 'hito-task-input') state.editor.pendingTask = input.value;
+    if (input.dataset.hitoTaskNotes) state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskNotes).notes = input.value;
+    if (input.hasAttribute('data-hito-new') && input.value.trim()) {
+      state.editor.tasks ||= [];
+      if (state.editor.tasks.length >= 300) { fail(new Error('El hito admite hasta 300 actividades.')); return; }
+      const id = uuid(); const caret = input.selectionStart;
+      state.editor.tasks.push({ id, title: input.value, completed: false, notes: '' });
+      render();
+      const fresh = document.querySelector(`[data-hito-task-text="${id}"]`);
+      fresh?.focus(); fresh?.setSelectionRange(caret, caret);
+    }
   }
   if (input.id === 'point-input') { state.editor.pendingText = input.value; rememberDraft(); }
   if (input.name === 'minute-title') { state.editor.title = input.value; rememberDraft(); }
@@ -310,7 +320,7 @@ root.addEventListener('input', (event) => {
 root.addEventListener('change', async (event) => {
   const input = event.target;
   try {
-    if (input.dataset.hitoTaskDone) { state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskDone).completed = input.checked; render(); }
+    if (input.dataset.hitoTaskState) { state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskState).completed = input.value === 'done'; render(); }
     if (input.dataset.moveNote) { state.editor.notes.find((n) => n.id === input.dataset.moveNote).folder_id = input.value; invalidate(); render(); }
     if (input.dataset.folderOwner) { state.editor.folders.find((f) => f.id === input.dataset.folderOwner).assignee = input.value; invalidate(); }
     if (input.dataset.actionable) { state.editor.notes.find((n) => n.id === input.dataset.actionable).actionable = input.checked; invalidate(); }
@@ -326,7 +336,9 @@ root.addEventListener('change', async (event) => {
   } catch (error) { fail(error); await refresh({ silent: true }); }
 });
 root.addEventListener('keydown', (event) => {
-  if (event.target.id === 'hito-task-input' && event.key === 'Enter') { event.preventDefault(); try { addHitoTask(); } catch (error) { fail(error); } }
+  if ((event.target.dataset.hitoTaskText || event.target.hasAttribute('data-hito-new')) && event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault(); document.querySelector('[data-hito-new]')?.focus();
+  }
   if (event.target.id === 'point-input' && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); try { addPoints(); } catch (error) { fail(error); } }
   if (event.key === 'Escape') closeModal();
   if (event.key === 'Tab' && state.modal) {
@@ -371,24 +383,24 @@ function minuteCard(m) {
 }
 function milestoneCard(h) {
   const counts = taskCounts(h.tasks);
-  return `<article class="milestone-card"><div class="card-top"><span class="year">${h.year}</span><span class="document-icon">◷</span>${trash('milestone',h.id,h.title)}</div><button class="card-title" data-milestone="${h.id}">${esc(h.title)}</button><p>${esc(h.purpose || h.guidelines || 'Planificación y aprendizajes guardados.')}</p><div class="milestone-detail"><span>Directrices</span><p>${esc(h.guidelines || 'Sin directrices aún.')}</p></div><div class="milestone-task-summary"><strong>Tareas realizadas o por realizar</strong><span>✓ ${counts.done} realizadas · ○ ${counts.pending} por realizar</span>${(h.tasks || []).slice(0,3).map((t) => `<p class="${t.completed ? 'done' : ''}">${t.completed ? '✓' : '○'} ${esc(t.title)}</p>`).join('')}</div><footer><button class="text-button" data-milestone="${h.id}">Ver historial ↗</button><button class="button small" data-reuse="${h.id}">Usar como base</button></footer></article>`;
+  return `<article class="milestone-card"><div class="card-top"><span class="year">${h.year}</span><span class="document-icon">◷</span>${trash('milestone',h.id,h.title)}</div><button class="card-title" data-milestone="${h.id}">${esc(h.title)}</button><div class="milestone-task-summary"><strong>Planilla histórica de actividades</strong><span>${counts.done} realizadas · ${counts.pending} por realizar</span>${(h.tasks || []).slice(0,3).map((t) => `<p><span class="activity-state">${t.completed ? 'Realizada' : 'Por realizar'}</span> ${esc(t.title)}</p>`).join('')}</div><p>${esc(h.purpose || h.guidelines || 'Planificación y aprendizajes guardados.')}</p><div class="milestone-detail"><span>Directrices</span><p>${esc(h.guidelines || 'Sin directrices aún.')}</p></div><footer><button class="text-button" data-milestone="${h.id}">Ver historial ↗</button><button class="button small" data-reuse="${h.id}">Usar como base</button><button class="button small" data-export-hito="${h.id}" aria-label="Descargar PDF de ${esc(h.title)}">↓ PDF</button></footer></article>`;
 }
 function folderLibrary() {
   return `<details class="folder-library"><summary>Mis carpetas guardadas (${state.data.folders.length})</summary><p>Eliminar aquí quita la carpeta de la biblioteca; las minutas guardadas conservan su historial.</p>${state.data.folders.map((f) => `<div class="library-folder"><span>▱ ${esc(f.name)}</span><button type="button" class="text-button" data-convert-folder="${f.id}" data-library="true">Convertir en hito histórico</button>${trash('folder',f.id,f.name)}</div>`).join('') || '<p>No hay carpetas guardadas.</p>'}</details>`;
 }
 function hitoTasksEditor(h) {
-  const tasks = h.tasks || [];
-  const counts = taskCounts(tasks);
-  return `<section class="hito-tasks"><header><h3>Tareas realizadas o por realizar</h3><span>✓ ${counts.done} realizadas · ○ ${counts.pending} por realizar</span></header><p class="hint">Marca lo realizado. Los cambios se conservan al guardar el hito.</p><div class="hito-task-add"><input id="hito-task-input" aria-label="Nueva tarea del hito" placeholder="Añadir una tarea…" maxlength="2000" value="${esc(h.pendingTask || '')}"><button type="button" class="button small" data-action="add-hito-task">+ Agregar tarea</button></div>${tasks.map((t) => `<div class="hito-task ${t.completed ? 'done' : ''}"><input type="checkbox" data-hito-task-done="${t.id}" ${t.completed ? 'checked' : ''} aria-label="Realizada: ${esc(t.title)}"><input data-hito-task-text="${t.id}" aria-label="Texto de la tarea" value="${esc(t.title)}" required maxlength="2000"><button type="button" class="trash-button" data-remove-hito-task="${t.id}" aria-label="Eliminar tarea del hito: ${esc(t.title)}">${trashIcon}</button></div>`).join('') || '<p class="hint">Todavía no hay tareas. Agrega las realizadas y las pendientes.</p>'}</section>`;
+  const tasks = h.tasks || []; const counts = taskCounts(tasks);
+  return `<section class="hito-tasks"><header><h3>Planilla histórica de actividades</h3><span>${counts.done} realizadas · ${counts.pending} por realizar</span></header><p class="hint">Deja aquí lo que hiciste y lo que falta. Escribe en la última fila para continuar la planilla. Enter pasa a una fila nueva; Shift + Enter permite varias líneas. Los cambios se conservan al guardar el hito.</p><div class="hito-sheet-wrap"><table class="hito-sheet"><thead><tr><th scope="col">Tarea / actividad</th><th scope="col">Estado</th><th scope="col">Observaciones para el próximo año</th><th scope="col"><span class="sr-only">Eliminar</span></th></tr></thead><tbody>${tasks.map((t) => `<tr class="${t.completed ? 'done' : ''}"><td><textarea data-hito-task-text="${t.id}" aria-label="Tarea o actividad" required maxlength="2000" rows="2">${esc(t.title)}</textarea></td><td><select data-hito-task-state="${t.id}" aria-label="Estado de ${esc(t.title)}"><option value="pending" ${!t.completed ? 'selected' : ''}>Por realizar</option><option value="done" ${t.completed ? 'selected' : ''}>Realizada</option></select></td><td><textarea data-hito-task-notes="${t.id}" aria-label="Observaciones de ${esc(t.title)}" maxlength="4000" rows="2" placeholder="Qué recordar, cómo se hizo, qué mejorar…">${esc(t.notes || '')}</textarea></td><td><button type="button" class="trash-button" data-remove-hito-task="${t.id}" aria-label="Eliminar tarea del hito: ${esc(t.title)}">${trashIcon}</button></td></tr>`).join('')}${tasks.length < 300 ? '<tr class="new-sheet-row"><td><textarea data-hito-new aria-label="Nueva fila de la planilla" placeholder="Escribe la siguiente actividad aquí…" maxlength="2000" rows="2"></textarea></td><td><span class="hint">Por realizar</span></td><td><span class="hint">La fila se incorpora al escribir.</span></td><td></td></tr>' : ''}</tbody></table></div></section>`;
 }
-function addHitoTask(redraw = true) {
-  const text = (state.editor.pendingTask || '').trim();
-  if (!text) return;
-  state.editor.tasks ||= [];
-  if (state.editor.tasks.length >= 300) throw new Error('El hito admite hasta 300 tareas.');
-  state.editor.tasks.push({ id: uuid(), title: text, completed: false });
-  state.editor.pendingTask = '';
-  if (redraw) { render(); document.querySelector('#hito-task-input')?.focus(); }
+async function exportHito(id) {
+  const hito = id ? state.data.milestones.find((h) => h.id === id) : state.editor;
+  if (!hito) throw new Error('Abre un hito para descargar su planilla.');
+  state.busy = true;
+  try {
+    const { downloadMilestonePdf } = await import('./lib/milestone-pdf.js');
+    await downloadMilestonePdf(hito, person(state.profile)?.name || '');
+    toast('PDF del hito descargado.');
+  } finally { state.busy = false; }
 }
 async function convertFolder(id, library) {
   const folder = (library ? state.data.folders : state.editor.folders).find((f) => f.id === id);

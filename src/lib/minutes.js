@@ -1,5 +1,9 @@
 export const STATUS = { sin_iniciar: 'Sin iniciar', iniciada: 'Iniciada', terminada: 'Terminada' };
 
+export function minutePayload(minute, publish) {
+  return { ...minute, analysis: publish ? (minute.analysis || analyzeMinute(minute)) : (minute.analysis || {}), state: publish ? 'published' : 'draft' };
+}
+
 export function cleanLine(text) {
   return text.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim();
 }

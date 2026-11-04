@@ -10,16 +10,17 @@ Calendario comercial, minutas automatizadas, distribución de tareas e hitos his
 - Cada agenda personal muestra sus tareas y las compartidas. Compartido muestra solo la agenda común, nunca las tareas privadas de otros perfiles. Se puede crear para el perfil abierto o Compartido. Los cumpleaños son comunes al equipo.
 - Nicolás y Benjamín entran con contraseña verificada en el servidor; Tomás y Compartido tienen acceso directo por decisión del equipo.
 - Cada perfil ve únicamente sus minutas, carpetas e hitos. Compartido tiene sus propios documentos y no funciona como acceso a documentos privados.
-- Distribución muestra las tareas y estados de todo el equipo. Cambian el estado el responsable y el creador de la minuta; los demás consultan.
+- Distribución aplica permisos en el servidor: Nicolás y Benjamín consultan todos los grupos; Tomás y los demás perfiles abiertos solo consultan su grupo y Compartido. Compartido solo consulta su propio grupo. Cambian el estado el responsable y el creador de la minuta, siempre que tengan acceso a ese grupo; los demás consultan.
 - Enter convierte un punto en tarjeta; Shift+Enter permite un salto de línea. Se puede arrastrar a una carpeta o moverla con el selector, también en celular.
 - Cada carpeta tiene un responsable. El resumen extractivo se genera automáticamente desde el punteo, reconoce acuerdos explícitos y se puede corregir antes de guardar. No usa un servicio de IA generativa ni inventa plazos, responsables o acuerdos. Desmarcar “Crear tarea” conserva el punto como contexto.
-- Guardar y distribuir es atómico: se guarda la minuta y se crean/actualizan sus tareas con claves estables. Volver a guardar conserva el estado de las tareas existentes y no genera duplicados.
+- Guardar y distribuir funciona con un solo clic: prepara el resumen si falta y guarda la minuta y sus tareas de forma atómica. “Analizar minuta” sigue disponible para revisar antes de guardar, pero es opcional. Volver a guardar conserva los estados y no genera duplicados.
 - Los estados son Sin iniciar, Iniciada y Terminada. Los tiempos se guardan en el servidor y se muestran en America/Santiago.
 - Los hitos guardan año, propósito, directrices, plan y aprendizajes. “Usar como base” abre una nueva edición conservando el registro original.
 - Los registros incluyen una papelera con confirmación: minutas, hitos, carpetas, puntos y tareas (incluidas las del calendario, proyectos, cumpleaños y subtareas). Solo el propietario elimina documentos privados; el responsable o creador puede eliminar una tarea distribuida.
 - Eliminar una minuta elimina también sus tareas distribuidas. Eliminar una tarea distribuida conserva una marca interna para impedir que reaparezca al guardar la minuta. No hay recuperación desde la aplicación.
 - Las carpetas de una minuta incluyen “Convertir en hito histórico”: copia sus puntos y tareas, respeta el estado completado y abre un hito para revisar y guardar, sin eliminar ni modificar el origen. “Mis carpetas guardadas” permite gestionar también la biblioteca. Quitar una carpeta de la minuta deja los puntos sin agrupar; eliminarla de la biblioteca no modifica minutas anteriores.
-- Cada hito incluye “Tareas realizadas o por realizar”, con texto editable, casillas de completado y conteos. Los cambios se conservan al guardar. Al usar un hito como base para otro año, las tareas se copian como pendientes y el original conserva su historial.
+- Cada hito prioriza la planilla histórica de actividades, justo debajo del título y año: actividad, estado Realizada/Por realizar y observaciones para el próximo año. Se escribe directamente en la última fila, sin botón “Agregar tarea”. El texto realizado sigue legible, sin tachar. Los cambios se conservan al guardar. Al usar un hito como base, se copian sus actividades como pendientes sin modificar el original.
+- “Descargar PDF” exporta la planilla con estados y observaciones, propósito, directrices, planificación y aprendizajes. Funciona desde la tarjeta guardada o el editor (incluye los cambios aún no guardados). El PDF se genera localmente, sin enviar datos a servicios de conversión, con paginación, encabezados y pies.
 
 ## Arquitectura y privacidad
 
@@ -51,5 +52,7 @@ npm run build
 `supabase/tests/calendar.sql` prueba CRUD, calendario privado y compartido, subtareas, completadas, recurrencias, preparación, proyectos y cumpleaños dentro de una transacción revertida. Configura también `VITE_VAPID_PUBLIC_KEY` para Web Push; cada dispositivo debe autorizar las notificaciones y asociarse al perfil abierto.
 
 `supabase/tests/workspace_deletion.sql` verifica permisos de eliminación, cascada de minutas, tareas eliminadas que no reaparecen, historial de carpetas, versiones y validación de tareas de hitos. `20261104123240_workspace_deletion_milestone_tasks.sql` mantiene el RPC anterior en el esquema privado y valida sesión y permisos en su nueva entrada. Las advertencias del asesor sobre RPCs SECURITY DEFINER públicos son intencionales para las sesiones de perfil; no se otorgan permisos directos a tablas privadas.
+
+`20261104162207_restrict_assignment_visibility.sql` restringe los resultados del RPC y la modificación de tareas por grupo. `supabase/tests/task_visibility.sql` prueba acceso de los cuatro perfiles y las mutaciones prohibidas. `tests/task-access.test.js` cubre las pestañas y `tests/milestone-pdf.test.js` la exportación y paginación. PDF-LIB 1.17.1 (MIT) se conserva versionado en `src/vendor/`, con licencia, y se carga solo al exportar.
 
 El despliegue de producción se realiza con la integración GitHub → Vercel al actualizar main. Enlace: https://calendario-seven-omega.vercel.app/

@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeMinute, elapsedSince } from '../src/lib/minutes.js';
+import { analyzeMinute, elapsedSince, minutePayload } from '../src/lib/minutes.js';
 
 const minute = () => ({ title: 'Reunión', folders: [{ id: 'f1', name: 'Evento', assignee: 'tomas' }], notes: [
   { id: 'n1', text: 'Confirmar recinto', folder_id: 'f1', actionable: true },
   { id: 'n2', text: 'Se acordó un encuentro presencial.', folder_id: 'f1', actionable: false },
 ] });
+
+it('prepares summary and published tasks in a single save, preserving edited analysis', () => {
+  const payload = minutePayload(minute(), true);
+  expect(payload.state).toBe('published');
+  expect(payload.analysis.task_count).toBe(1);
+  expect(minutePayload({ ...minute(), analysis: { summary: 'Resumen corregido' } }, true).analysis.summary).toBe('Resumen corregido');
+  expect(minutePayload({ title: 'Borrador', notes: [], folders: [] }, false).state).toBe('draft');
+});
 
 describe('análisis de minutas', () => {
   it('distribuye acciones al responsable sin convertir contexto en tareas', () => {
