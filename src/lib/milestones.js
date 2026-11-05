@@ -21,3 +21,15 @@ export function taskCounts(tasks = []) {
   const done = tasks.filter((t) => t.completed).length;
   return { done, pending: tasks.length - done };
 }
+
+// A new edition is a separate record. Keep previous observations as reference,
+// but make every activity pending; the original and its results stay untouched.
+export function reuseMilestone(source, year, makeId = () => crypto.randomUUID()) {
+  return {
+    title: source.title, year, purpose: source.purpose || '', guidelines: source.guidelines || '',
+    plan: source.plan || '', learnings: '', source_hito_id: source.id, version: 0,
+    source_snapshot: structuredClone(source),
+    tasks: (source.tasks || []).map((t) => ({ ...t, id: makeId(), completed: false })),
+    documents: [],
+  };
+}

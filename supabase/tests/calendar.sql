@@ -2,7 +2,7 @@ begin;
 do $$
 declare n text; t text; shared text; task jsonb; project jsonb; recur jsonb; sid uuid; bid uuid;
 begin
- n=public.pdr_sign_in('nicolas','1234')->>'token';
+ n=public.pdr_sign_in('nicolas',current_setting('pdr.test_pin',true))->>'token';
  t=public.pdr_sign_in('tomas','')->>'token';
  shared=public.pdr_sign_in('ambos','')->>'token';
  begin

@@ -1,11 +1,13 @@
 import { confirmDelete } from './lib/confirm.js';
 import './workspace.css';
-import { login, logout, profiles, request, session } from './lib/workspace-store.js';
+import { login, logout, profiles, request, session, milestoneFile } from './lib/workspace-store.js';
+import { documentMeta } from '../supabase/functions/hito-documents/validation.js';
 import { analyzeMinute, cleanLine, elapsedSince, minutePayload, STATUS } from './lib/minutes.js';
 import { mountCalendar } from './main.js';
-import { folderToMilestone, taskCounts } from './lib/milestones.js';
+import { folderToMilestone, taskCounts, reuseMilestone } from './lib/milestones.js';
 import { canViewTasks, taskProfiles } from './lib/task-access.js';
 import { PRIORITIES, normalizePriority, sortTasksByPriority } from './lib/priorities.js';
+import { scheduledDate, shortDate } from './lib/scheduling.js';
 
 const root = document.querySelector('#app');
 const requestedView = new URLSearchParams(location.search).get('view');
@@ -103,7 +105,7 @@ function tasksView() {
     <section class="task-list">${filtered.length ? filtered.map((t) => {
       const editable = t.assignee === state.profile || t.owner_id === state.profile;
       return `<article class="assignment ${t.status} priority-${normalizePriority(t.priority)}">${editable ? trash('assignment', t.id, t.title) : ''}<span class="task-mark">${t.status === 'terminada' ? '✓' : t.status === 'iniciada' ? '◴' : '○'}</span><div class="assignment-body"><div class="task-source"><span>▱ ${esc(t.folder_name)}</span><span>${esc(t.minute_title)}</span>${priorityBadge(t.priority)}</div><h2>${esc(t.title)}</h2><p>${t.started_at ? `<span data-elapsed="${t.started_at}">Inició ${elapsedSince(t.started_at)}</span><span class="exact-time"> · ${date(t.started_at)}</span>` : 'Todavía no iniciada'}${t.completed_at ? ` · Terminada el ${date(t.completed_at)}` : ''}</p><small>Creada por ${esc(person(t.owner_id)?.name)}</small></div>
-      <div class="task-control"><label class="sr-only" for="task-${t.id}">Estado de ${esc(t.title)}</label><select id="task-${t.id}" data-task-status="${t.id}" ${editable ? '' : 'disabled'}>${Object.entries(STATUS).map(([v,l]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${editable ? '' : '<small>Solo consulta</small>'}</div></article>`;
+      <div class="task-control">${t.scheduled_date ? `<button class="text-button" data-calendar-date="${esc(t.scheduled_date)}">▦ ${esc(shortDate(t.scheduled_date))}</button>` : '<small>Sin fecha</small>'}<label class="sr-only" for="task-${t.id}">Estado de ${esc(t.title)}</label><select id="task-${t.id}" data-task-status="${t.id}" ${editable ? '' : 'disabled'}>${Object.entries(STATUS).map(([v,l]) => `<option value="${v}" ${t.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${editable ? '' : '<small>Solo consulta</small>'}</div></article>`;
     }).join('') : empty('Todo por construir', 'Aquí aparecerán las tareas de este integrante al guardar y distribuir una minuta.', '☑')}</section>`;
 }
 function milestonesView() {
@@ -131,7 +133,7 @@ function render() {
       calendarHost = document.createElement('div');
       slot.append(calendarHost);
       disposeCalendar = mountCalendar(calendarHost, state.profile, state.profiles);
-    } else slot.append(calendarHost);
+    } else { slot.append(calendarHost); calendarHost.dispatchEvent(new Event('pdr-calendar-refresh')); }
   }
 }
 function newMinute() {
@@ -143,6 +145,7 @@ function newMinute() {
 }
 function openMinute(id) {
   state.editor = structuredClone(state.data.minutes.find((m) => m.id === id));
+  if (!Array.isArray(state.editor.analysis?.folders)) state.editor.analysis = null;
   state.modal = 'minute';
   render();
 }
@@ -157,7 +160,12 @@ function modalView() {
 }
 function noteCard(note) {
   const priority = normalizePriority(note.priority);
-  return `<article class="point-card priority-${priority}" draggable="true" data-note="${note.id}"><span class="grip" aria-hidden="true">⠿</span><textarea data-note-text="${note.id}" aria-label="Editar punto" rows="2" maxlength="2000">${esc(note.text)}</textarea><button type="button" class="trash-button remove-point" data-remove-point="${note.id}" aria-label="Eliminar punto">${trashIcon}</button><div class="point-controls"><label><input type="checkbox" data-actionable="${note.id}" ${note.actionable !== false ? 'checked' : ''}> Crear tarea</label><label class="sr-only" for="move-${note.id}">Mover punto a carpeta</label><select id="move-${note.id}" data-move-note="${note.id}"><option value="">Sin agrupar</option>${state.editor.folders.map((f) => `<option value="${f.id}" ${f.id === note.folder_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><label class="note-priority" for="priority-${note.id}"><span class="priority-dot" aria-hidden="true"></span>Prioridad<select id="priority-${note.id}" data-note-priority="${note.id}" ${note.actionable === false ? 'disabled' : ''}>${Object.entries(PRIORITIES).map(([key, p]) => `<option value="${key}" ${key === priority ? 'selected' : ''}>${p.label} · ${p.color}</option>`).join('')}</select></label></div></article>`;
+  return `<article class="point-card priority-${priority}" draggable="true" data-note="${note.id}"><span class="grip" aria-hidden="true">⠿</span><textarea data-note-text="${note.id}" aria-label="Editar punto" rows="2" maxlength="2000">${esc(note.text)}</textarea><button type="button" class="trash-button remove-point" data-remove-point="${note.id}" aria-label="Eliminar punto">${trashIcon}</button><div class="point-controls"><label><input type="checkbox" data-actionable="${note.id}" ${note.actionable !== false ? 'checked' : ''}> Crear tarea</label><label class="sr-only" for="move-${note.id}">Mover punto a carpeta</label><select id="move-${note.id}" data-move-note="${note.id}"><option value="">Sin agrupar</option>${state.editor.folders.map((f) => `<option value="${f.id}" ${f.id === note.folder_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select><label class="note-priority" for="priority-${note.id}"><span class="priority-dot" aria-hidden="true"></span>Prioridad<select id="priority-${note.id}" data-note-priority="${note.id}" ${note.actionable === false ? 'disabled' : ''}>${Object.entries(PRIORITIES).map(([key, p]) => `<option value="${key}" ${key === priority ? 'selected' : ''}>${p.label} · ${p.color}</option>`).join('')}</select></label>${noteSchedule(note)}</div></article>`;
+}
+function noteSchedule(note) {
+  const mode = note.schedule_mode || 'folder';
+  const date = scheduledDate(note, state.editor.folders);
+  return `<div class="note-schedule"><label>Calendario<select data-note-schedule="${note.id}" ${note.actionable === false ? 'disabled' : ''}><option value="folder" ${mode === 'folder' ? 'selected' : ''}>Usar fecha de carpeta</option><option value="custom" ${mode === 'custom' ? 'selected' : ''}>Fecha propia</option><option value="none" ${mode === 'none' ? 'selected' : ''}>Sin fecha</option></select></label>${mode === 'custom' ? `<label>Fecha opcional<input type="date" min="2000-01-01" max="2200-12-31" data-note-date="${note.id}" value="${esc(note.scheduled_date || '')}"></label>` : ''}<small>${date && note.actionable !== false ? `▦ ${esc(shortDate(date))} · Se agenda al distribuir` : 'Sin fecha: solo en distribución'}</small></div>`;
 }
 function minuteEditor() {
   const m = state.editor;
@@ -169,7 +177,7 @@ function minuteEditor() {
     ${folderLibrary()}
     <form id="folder-form" class="folder-form" hidden><label>Nombre de carpeta<input name="name" required maxlength="100" placeholder="Ej.: Evento de fin de año"></label><label>Responsable<select name="assignee">${options(state.profile)}</select></label><button class="button primary small">Crear carpeta</button></form>
     <div class="notebook-workspace"><section class="capture-column" data-drop-folder=""><h3>Puntos de la reunión <span>${loose.length}</span></h3><p class="hint">Enter crea una tarjeta. Shift + Enter permite seguir escribiendo. Arrástrala a una carpeta o usa su selector.</p><textarea id="point-input" placeholder="Escribe una idea, acuerdo o pendiente…" aria-label="Nuevo punto de la minuta" rows="5" maxlength="20000">${esc(m.pendingText || '')}</textarea><button class="button small add-point" data-action="add-point">+ Añadir punto</button><div class="loose-points">${loose.map(noteCard).join('')}</div></section>
-    <section class="folders-board" aria-label="Carpetas de la minuta">${m.folders.length ? m.folders.map((f) => `<section class="folder-column" data-drop-folder="${f.id}"><header><span class="folder-icon">▱</span><h3>${esc(f.name)}</h3><b>${m.notes.filter((n) => n.folder_id === f.id).length}</b>${trash('folder-in-minute', f.id, f.name)}</header><label class="folder-owner">Responsable<select data-folder-owner="${f.id}">${options(f.assignee)}</select></label><button type="button" class="convert-folder text-button" data-convert-folder="${f.id}">◷ Convertir en hito histórico</button><div class="folder-points">${m.notes.filter((n) => n.folder_id === f.id).map(noteCard).join('') || '<div class="drop-hint">Arrastra tus puntos aquí<br>o elige esta carpeta en una tarjeta.</div>'}</div></section>`).join('') : '<div class="folder-placeholder"><span>▱</span><h3>Cada tema, en su carpeta.</h3><p>Agrega una carpeta, elige su responsable y reúne los puntos relacionados.</p></div>'}</section></div>
+    <section class="folders-board" aria-label="Carpetas de la minuta">${m.folders.length ? m.folders.map((f) => `<section class="folder-column" data-drop-folder="${f.id}"><header><span class="folder-icon">▱</span><h3>${esc(f.name)}</h3><b>${m.notes.filter((n) => n.folder_id === f.id).length}</b>${trash('folder-in-minute', f.id, f.name)}</header><label class="folder-owner">Responsable<select data-folder-owner="${f.id}">${options(f.assignee)}</select></label><label class="folder-date">Fecha de carpeta (opcional)<input type="date" data-folder-date="${f.id}" min="2000-01-01" max="2200-12-31" value="${esc(f.scheduled_date || '')}"><small>Se aplica a sus tareas salvo que elijas otra fecha o «Sin fecha».</small></label><button type="button" class="convert-folder text-button" data-convert-folder="${f.id}">◷ Convertir en hito histórico</button><div class="folder-points">${m.notes.filter((n) => n.folder_id === f.id).map(noteCard).join('') || '<div class="drop-hint">Arrastra tus puntos aquí<br>o elige esta carpeta en una tarjeta.</div>'}</div></section>`).join('') : '<div class="folder-placeholder"><span>▱</span><h3>Cada tema, en su carpeta.</h3><p>Agrega una carpeta, elige su responsable y reúne los puntos relacionados.</p></div>'}</section></div>
     ${m.analysis ? `<section class="analysis"><div class="analysis-heading"><div><span class="eyebrow">REVISIÓN ANTES DE DISTRIBUIR</span><h2>Resumen por carpeta</h2></div><span class="badge done">${m.analysis.task_count} tareas</span></div><p class="hint">Síntesis basada en tu punteo. Se conservan los acuerdos escritos; los puntos marcados como contexto no generan tareas.</p>${m.analysis.folders.map((f) => `<article><h3>▱ ${esc(f.name)} <small>→ ${esc(person(f.assignee)?.name)}</small></h3><label>Resumen editable<textarea data-summary="${f.id}" rows="3" maxlength="10000">${esc(f.summary)}</textarea></label><p>${f.tasks.length} tareas para distribuir${f.agreements.length ? ` · ${f.agreements.length} acuerdos identificados` : ''}</p></article>`).join('')}</section>` : ''}
     <footer class="notebook-actions"><span>${m.notes.length} puntos · ${m.folders.length} carpetas</span><div>${m.state !== 'published' ? '<button class="button" data-action="save-draft">Guardar borrador</button>' : ''}<button class="button" data-action="analyze">Analizar minuta</button><button class="button primary" data-action="publish" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Guardando…' : 'Guardar minuta y distribuir'} →</button></div></footer>`;
 }
@@ -178,6 +186,8 @@ function milestoneEditor() {
   return `<form id="milestone-form"><div class="editor-record-actions">${trash('milestone', h.id || 'draft', h.title || 'este hito')}</div><span class="eyebrow">MEMORIA DEL EQUIPO · TU HISTORIAL PRIVADO</span><h2>${h.id ? 'Editar hito histórico' : 'Crear un hito histórico'}</h2><p>Tu referencia para repetirlo el próximo año: qué se hizo, qué queda y qué conviene recordar.</p>
     <div class="hito-identity"><label>Título del evento o hito<input name="title" required maxlength="180" value="${esc(h.title)}" placeholder="Ej.: Encuentro anual del equipo"></label><label>Año<input type="number" name="year" required min="2000" max="2200" value="${h.year}"></label></div>
     ${hitoTasksEditor(h)}
+    ${hitoDocuments(h)}
+    ${hitoOrigin(h)}
     <div class="form-grid hito-background"><label class="wide">Para qué se realiza<textarea name="purpose" rows="2" maxlength="10000">${esc(h.purpose)}</textarea></label><label class="wide">Directrices y criterios<textarea name="guidelines" rows="4" maxlength="20000" placeholder="Objetivo, público, requisitos y criterios que se deben respetar…">${esc(h.guidelines)}</textarea></label><label class="wide">Planificación y pasos a seguir<textarea name="plan" rows="5" maxlength="20000" placeholder="Actividades, recursos, contactos internos, pasos y tiempos de preparación…">${esc(h.plan)}</textarea></label><label class="wide">Aprendizajes para otros años<textarea name="learnings" rows="4" maxlength="20000" placeholder="Qué funcionó, qué cambiar y qué recordar la próxima vez…">${esc(h.learnings)}</textarea></label></div>
     <div class="form-actions"><button type="button" class="button" data-export-hito="">↓ Descargar PDF</button><button type="button" class="button" data-action="close-modal">Cerrar</button><button class="button primary" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Guardando…' : 'Guardar hito histórico'}</button></div></form>`;
 }
@@ -235,14 +245,36 @@ root.addEventListener('click', async (event) => {
       }
       return;
     }
-    if (target.dataset.view) { state.view = target.dataset.view; state.search = ''; render(); return; }
+    if (target.dataset.view) { state.view = target.dataset.view; state.search = ''; if (session && state.view === 'tasks') await refresh(); else render(); return; }
     if (target.dataset.minute) { openMinute(target.dataset.minute); return; }
+    if (target.dataset.calendarDate) {
+      state.view='calendar'; render(); calendarHost.dispatchEvent(new CustomEvent('pdr-calendar-refresh',{detail:{date:target.dataset.calendarDate}})); return;
+    }
+    if (target.dataset.downloadDocument) {
+      target.disabled=true; target.textContent='Preparando…';
+      try { await downloadDocument(target.dataset.downloadDocument); }
+      finally { target.disabled=false; target.textContent='Descargar'; }
+      return;
+    }
+    if (target.dataset.removeDocument) {
+      if (!await confirmDelete('¿Estás seguro de que quieres eliminar este archivo adjunto de esta edición? No se eliminarán las copias de otras ediciones.')) return;
+      state.busy=true;
+      try { await milestoneFile('remove',{file_id:target.dataset.removeDocument}); await refreshHitoDocuments(); toast('Archivo eliminado de esta edición.'); }
+      finally { state.busy=false; render(); }
+      return;
+    }
+    if (target.dataset.action==='copy-hito-documents') {
+      state.busy=true;
+      try { await persistHito({copyDocuments:true}); toast('Documentos de referencia copiados.'); }
+      finally { state.busy=false; render(); }
+      return;
+    }
     if (target.dataset.assignee && canViewTasks(state.profile, target.dataset.assignee)) { state.selected = target.dataset.assignee; state.search = ''; state.status = 'all'; render(); return; }
     if (target.dataset.statusFilter) { state.status = target.dataset.statusFilter; render(); return; }
     if (target.dataset.milestone || target.dataset.reuse) {
       state.editor = structuredClone(state.data.milestones.find((h) => h.id === (target.dataset.milestone || target.dataset.reuse)));
       state.returnMinute = null;
-      if (target.dataset.reuse) { delete state.editor.id; state.editor.version = 0; state.editor.year = year(); state.editor.title += ' · nueva edición'; state.editor.tasks = (state.editor.tasks || []).map((t) => ({ ...t, id: uuid(), completed: false })); }
+      if (target.dataset.reuse) state.editor = reuseMilestone(state.editor, Math.min(2200, Math.max(year(), state.editor.year + 1)));
       state.modal = 'milestone'; render(); return;
     }
     if (target.dataset.deleteKind) { await deleteRecord(target.dataset.deleteKind, target.dataset.deleteId); return; }
@@ -283,7 +315,8 @@ root.addEventListener('submit', async (event) => {
       invalidate(); render();
     } else if (form.id === 'milestone-form') {
 
-      await request('save_milestone', { ...state.editor, ...data, year: Number(data.year) });
+      state.editor={...state.editor,...data,year:Number(data.year)};
+      await persistHito();
       if (state.returnMinute) { state.editor = state.returnMinute; state.returnMinute = null; state.modal = 'minute'; }
       else { state.modal = null; state.editor = null; }
       await refresh(); toast('Hito histórico guardado.');
@@ -324,6 +357,7 @@ root.addEventListener('input', (event) => {
 root.addEventListener('change', async (event) => {
   const input = event.target;
   try {
+    if (input.hasAttribute('data-hito-files')) { await uploadDocuments([...input.files]); return; }
     if (input.dataset.hitoTaskState) { state.editor.tasks.find((t) => t.id === input.dataset.hitoTaskState).completed = input.value === 'done'; render(); }
     if (input.dataset.moveNote) { state.editor.notes.find((n) => n.id === input.dataset.moveNote).folder_id = input.value; invalidate(); render(); }
     if (input.dataset.folderOwner) { state.editor.folders.find((f) => f.id === input.dataset.folderOwner).assignee = input.value; invalidate(); }
@@ -332,6 +366,9 @@ root.addEventListener('change', async (event) => {
       state.editor.notes.find((n) => n.id === input.dataset.notePriority).priority = normalizePriority(input.value);
       invalidate(); render(); document.querySelector(`[data-note-priority="${input.dataset.notePriority}"]`)?.focus();
     }
+    if (input.dataset.folderDate) { state.editor.folders.find((f) => f.id === input.dataset.folderDate).scheduled_date = input.value; invalidate(); render(); }
+    if (input.dataset.noteDate) { state.editor.notes.find((n) => n.id === input.dataset.noteDate).scheduled_date = input.value; invalidate(); render(); }
+    if (input.dataset.noteSchedule) { state.editor.notes.find((n) => n.id === input.dataset.noteSchedule).schedule_mode = input.value; invalidate(); render(); }
     if (input.hasAttribute('data-folder-library') && input.value) {
       const f = state.data.folders.find((f) => f.id === input.value);
       state.editor.folders.push({ id: f.id, name: f.name, assignee: f.assignee }); invalidate(); render();
@@ -391,7 +428,7 @@ function minuteCard(m) {
 }
 function milestoneCard(h) {
   const counts = taskCounts(h.tasks);
-  return `<article class="milestone-card"><div class="card-top"><span class="year">${h.year}</span><span class="document-icon">◷</span>${trash('milestone',h.id,h.title)}</div><button class="card-title" data-milestone="${h.id}">${esc(h.title)}</button><div class="milestone-task-summary"><strong>Planilla histórica de actividades</strong><span>${counts.done} realizadas · ${counts.pending} por realizar</span>${(h.tasks || []).slice(0,3).map((t) => `<p><span class="activity-state">${t.completed ? 'Realizada' : 'Por realizar'}</span> ${esc(t.title)}</p>`).join('')}</div><p>${esc(h.purpose || h.guidelines || 'Planificación y aprendizajes guardados.')}</p><div class="milestone-detail"><span>Directrices</span><p>${esc(h.guidelines || 'Sin directrices aún.')}</p></div><footer><button class="text-button" data-milestone="${h.id}">Ver historial ↗</button><button class="button small" data-reuse="${h.id}">Usar como base</button><button class="button small" data-export-hito="${h.id}" aria-label="Descargar PDF de ${esc(h.title)}">↓ PDF</button></footer></article>`;
+  return `<article class="milestone-card"><div class="card-top"><span class="year">${h.year}</span><span class="document-icon">◷</span>${trash('milestone',h.id,h.title)}</div><button class="card-title" data-milestone="${h.id}">${esc(h.title)}</button><div class="milestone-task-summary"><strong>Planilla histórica de actividades</strong><span>${counts.done} realizadas · ${counts.pending} por realizar · ${(h.documents || []).length} archivos</span>${(h.tasks || []).slice(0,3).map((t) => `<p><span class="activity-state">${t.completed ? 'Realizada' : 'Por realizar'}</span> ${esc(t.title)}</p>`).join('')}</div><p>${esc(h.purpose || h.guidelines || 'Planificación y aprendizajes guardados.')}</p><div class="milestone-detail"><span>Directrices</span><p>${esc(h.guidelines || 'Sin directrices aún.')}</p></div><footer><button class="text-button" data-milestone="${h.id}">Ver historial ↗</button><button class="button small" data-reuse="${h.id}">Crear nueva edición</button><button class="button small" data-export-hito="${h.id}" aria-label="Descargar PDF de ${esc(h.title)}">↓ PDF</button></footer></article>`;
 }
 function folderLibrary() {
   return `<details class="folder-library"><summary>Mis carpetas guardadas (${state.data.folders.length})</summary><p>Eliminar aquí quita la carpeta de la biblioteca; las minutas guardadas conservan su historial.</p>${state.data.folders.map((f) => `<div class="library-folder"><span>▱ ${esc(f.name)}</span><button type="button" class="text-button" data-convert-folder="${f.id}" data-library="true">Convertir en hito histórico</button>${trash('folder',f.id,f.name)}</div>`).join('') || '<p>No hay carpetas guardadas.</p>'}</details>`;
@@ -399,6 +436,64 @@ function folderLibrary() {
 function hitoTasksEditor(h) {
   const tasks = h.tasks || []; const counts = taskCounts(tasks);
   return `<section class="hito-tasks"><header><h3>Planilla histórica de actividades</h3><span>${counts.done} realizadas · ${counts.pending} por realizar</span></header><p class="hint">Deja aquí lo que hiciste y lo que falta. Escribe en la última fila para continuar la planilla. Enter pasa a una fila nueva; Shift + Enter permite varias líneas. Los cambios se conservan al guardar el hito.</p><div class="hito-sheet-wrap"><table class="hito-sheet"><thead><tr><th scope="col">Tarea / actividad</th><th scope="col">Estado</th><th scope="col">Observaciones para el próximo año</th><th scope="col"><span class="sr-only">Eliminar</span></th></tr></thead><tbody>${tasks.map((t) => `<tr class="${t.completed ? 'done' : ''}"><td><textarea data-hito-task-text="${t.id}" aria-label="Tarea o actividad" required maxlength="2000" rows="2">${esc(t.title)}</textarea></td><td><select data-hito-task-state="${t.id}" aria-label="Estado de ${esc(t.title)}"><option value="pending" ${!t.completed ? 'selected' : ''}>Por realizar</option><option value="done" ${t.completed ? 'selected' : ''}>Realizada</option></select></td><td><textarea data-hito-task-notes="${t.id}" aria-label="Observaciones de ${esc(t.title)}" maxlength="4000" rows="2" placeholder="Qué recordar, cómo se hizo, qué mejorar…">${esc(t.notes || '')}</textarea></td><td><button type="button" class="trash-button" data-remove-hito-task="${t.id}" aria-label="Eliminar tarea del hito: ${esc(t.title)}">${trashIcon}</button></td></tr>`).join('')}${tasks.length < 300 ? '<tr class="new-sheet-row"><td><textarea data-hito-new aria-label="Nueva fila de la planilla" placeholder="Escribe la siguiente actividad aquí…" maxlength="2000" rows="2"></textarea></td><td><span class="hint">Por realizar</span></td><td><span class="hint">La fila se incorpora al escribir.</span></td><td></td></tr>' : ''}</tbody></table></div></section>`;
+}
+function hitoDocuments(h) {
+  const documents=h.documents || [];
+  const pending=(h.source_snapshot?.documents || []).filter((f)=>!documents.some((d)=>d.source_file_id===f.id));
+  return `<section class="hito-documents"><header><h3>Documentos de esta edición</h3><span>${documents.length} / 10 archivos</span></header><p class="hint">Adjunta PDF, Word, Excel, PowerPoint, TXT, CSV o imágenes, hasta 5 MB por archivo. Al adjuntar se guardan también los cambios del hito. Los archivos se descargan desde tu perfil, sin enlaces públicos.</p><label class="file-picker">Adjuntar archivos<input type="file" data-hito-files multiple accept=".pdf,.docx,.xlsx,.pptx,.txt,.csv,.png,.jpg,.jpeg" ${state.busy?'disabled':''}></label>${documents.map((f)=>`<div class="hito-file"><span><strong>${esc(f.name)}</strong><small>${Math.max(1,Math.ceil(f.size/1024))} KB</small></span><button type="button" class="button small" data-download-document="${f.id}">Descargar</button><button type="button" class="trash-button" data-remove-document="${f.id}" aria-label="Eliminar archivo ${esc(f.name)}">${trashIcon}</button></div>`).join('')||'<p class="hint">Todavía no hay archivos adjuntos.</p>'}${pending.length?`<p class="hint">${pending.length} documentos de referencia disponibles. En una edición nueva se copian al guardar. Cada edición conserva su propia copia.</p><button type="button" class="button small" data-action="copy-hito-documents" ${state.busy?'disabled':''}>Copiar documentos de referencia</button>`:''}</section>`;
+}
+function hitoOrigin(h) {
+  const origin=h.source_snapshot;
+  if (!origin?.title) return '';
+  const counts=taskCounts(origin.tasks);
+  return `<details class="hito-origin"><summary>Referencia de la edición ${origin.year}: ${esc(origin.title)}</summary><p class="hint">Registro anterior conservado como referencia. Sus resultados no se mezclan con el avance de esta edición.</p><p>${counts.done} realizadas · ${counts.pending} por realizar</p><h4>Actividades anteriores</h4>${(origin.tasks||[]).map((t)=>`<div class="origin-task"><strong>${t.completed?'Realizada':'Por realizar'} · ${esc(t.title)}</strong><p>${esc(t.notes||'')}</p></div>`).join('')}${[['Objetivo',origin.purpose],['Directrices',origin.guidelines],['Planificación',origin.plan],['Aprendizajes',origin.learnings]].map(([title,text])=>`<h4>${title}</h4><p class="origin-text">${esc(text||'Sin información registrada.')}</p>`).join('')}<h4>Documentos de referencia</h4>${(origin.documents||[]).map((f)=>`<p>${esc(f.name)}</p>`).join('')||'<p>Sin archivos de referencia.</p>'}</details>`;
+}
+async function refreshHitoDocuments() {
+  await refresh({silent:true});
+  if (state.modal==='milestone' && state.editor?.id) {
+    state.editor.documents=state.data.milestones.find((h)=>h.id===state.editor.id)?.documents || [];
+  }
+}
+async function persistHito({copyDocuments=false}={}) {
+  const h=state.editor;
+  const isNew=!h.id;
+  const payload=Object.fromEntries(Object.entries(h).filter(([key])=>!['documents','source_snapshot'].includes(key)));
+  const saved=await request('save_milestone',payload);
+  state.editor={...h,...saved};
+  await refreshHitoDocuments();
+  const source=(isNew || copyDocuments) ? (state.editor.source_snapshot?.documents || []) : [];
+  for (const file of source) {
+    if (!state.editor.documents.some((d)=>d.source_file_id===file.id)) {
+      try { await milestoneFile('copy',{file_id:file.id,milestone_id:saved.id}); }
+      catch(error) { await refreshHitoDocuments(); throw new Error(`El hito quedó guardado, pero no se copió «${file.name}»: ${error.message}`); }
+      await refreshHitoDocuments();
+    }
+  }
+  return saved;
+}
+async function uploadDocuments(files) {
+  if (state.busy || !files.length) return;
+  if (!document.querySelector('#milestone-form').reportValidity()) return;
+  files.forEach((f)=>documentMeta(f.name,f.size));
+  if ((state.editor.documents||[]).length+files.length>10) throw new Error('El hito admite hasta 10 archivos.');
+  state.busy=true; render();
+  try {
+    await persistHito();
+    for (const file of files) await milestoneFile('upload',{milestone_id:state.editor.id},file);
+    toast('Archivos adjuntos y cambios del hito guardados.');
+  } finally { await refreshHitoDocuments(); state.busy=false; render(); }
+}
+async function downloadDocument(id) {
+  const file=(state.editor?.documents||[]).find((f)=>f.id===id);
+  if (!file) throw new Error('Archivo no encontrado.');
+  const blob=await milestoneFile('download',{file_id:id});
+  if (blob.size!==file.size) throw new Error('El archivo recibido está incompleto. Intenta nuevamente.');
+  const href=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=href; a.download=file.name; a.className='button small'; a.textContent=`Guardar ${file.name}`;
+  document.querySelector('.hito-documents').append(a);
+  a.click();
+  toast('Archivo preparado. Si el navegador no inicia la descarga, pulsa el enlace «Guardar».');
+  setTimeout(()=>{URL.revokeObjectURL(href);a.remove();},300000);
 }
 async function exportHito(id) {
   const hito = id ? state.data.milestones.find((h) => h.id === id) : state.editor;
@@ -436,7 +531,10 @@ async function deleteRecord(kind, id) {
   if (!await confirmDelete('¿Estás seguro de que quieres eliminar ' + (kind === 'minute' ? 'esta minuta' : kind === 'milestone' ? 'este hito histórico' : kind === 'folder' ? 'esta carpeta' : 'esta tarea') + '?' + extra)) return;
   state.busy = true;
   try {
-    if (!isDraft) await request({ minute: 'delete_minute', milestone: 'delete_milestone', folder: 'delete_folder', assignment: 'delete_assignment' }[kind], { id, version: record.version });
+    if (!isDraft) {
+      await request({ minute: 'delete_minute', milestone: 'delete_milestone', folder: 'delete_folder', assignment: 'delete_assignment' }[kind], { id, version: record.version });
+      if (kind==='milestone') await milestoneFile('cleanup').catch(()=>toast('Hito eliminado. La limpieza de archivos se reintentará en la próxima operación.'));
+    }
     if (kind === 'minute') {
       const draft = sessionStorage.getItem(`pdr-draft-${state.profile}`);
       if (draft && JSON.parse(draft).id === id) sessionStorage.removeItem(`pdr-draft-${state.profile}`);

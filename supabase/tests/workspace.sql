@@ -4,9 +4,9 @@ declare n text; t text; b text; doc jsonb; again jsonb; payload jsonb; task_id u
 begin
  if public.pdr_sign_in('nicolas','')->>'error' is null then raise exception 'Password required'; end if;
  if public.pdr_sign_in('benjamin','wrong')->>'error' is null then raise exception 'Wrong password accepted'; end if;
- n := public.pdr_sign_in('nicolas','1234')->>'token';
+ n := public.pdr_sign_in('nicolas',current_setting('pdr.test_pin',true))->>'token';
  t := public.pdr_sign_in('tomas','')->>'token';
- b := public.pdr_sign_in('benjamin','1234')->>'token';
+ b := public.pdr_sign_in('benjamin',current_setting('pdr.test_pin',true))->>'token';
  if n is null or t is null or b is null then raise exception 'Login failed'; end if;
  begin
   perform public.pdr_workspace('load','invalid','{}');

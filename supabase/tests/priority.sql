@@ -5,7 +5,7 @@ declare
  ids uuid[]:=array[gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()];
  payload jsonb; doc jsonb; notes jsonb; aid uuid; started timestamptz; invalid text;
 begin
- n=public.pdr_sign_in('nicolas','1234')->>'token';
+ n=public.pdr_sign_in('nicolas',current_setting('pdr.test_pin',true))->>'token';
  t=public.pdr_sign_in('tomas','')->>'token';
  notes=jsonb_build_array(
   jsonb_build_object('id',ids[1],'text','__PRIORITY_HIGH__','folder_id',fid,'priority','alta'),

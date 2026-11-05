@@ -3,3 +3,7 @@ project_id = "pdr-planner"
 [functions.push-dispatch]
 verify_jwt = false
 
+# The function validates the custom PDR profile token through a service-only RPC.
+[functions.hito-documents]
+verify_jwt = false
+

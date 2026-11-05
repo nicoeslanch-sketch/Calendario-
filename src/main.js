@@ -95,6 +95,10 @@ const state = {
 
 let realtimeTimer;
 let disposed = false;
+host.addEventListener('pdr-calendar-refresh', (event) => {
+  if (event.detail?.date) { state.cursor=event.detail.date; state.selectedDate=event.detail.date; state.view='month'; state.modal=null; }
+  if (!disposed && !state.modal) refresh({quiet:true});
+}, {signal:controller.signal});
 
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -232,6 +236,10 @@ function render() {
     ${isIOS() && !window.matchMedia('(display-mode: standalone)').matches ? '<div class="ios-banner">Para recibir avisos en iPhone, agrega Planner Santa Clara a la pantalla de inicio desde Safari.</div>' : ''}
     ${state.loading ? '<div class="card empty">Cargando calendario…</div>' : renderView()}
   </main>${renderModal()}`;
+  for (const task of [...state.tasks,...state.history].filter((t)=>t.metadata?.read_only)) {
+    shadow.querySelectorAll(`[data-toggle-task="${task.id}"],[data-delete-task="${task.id}"]`).forEach((el)=>{el.disabled=true;el.title='Solo consulta';});
+    shadow.querySelectorAll(`[data-task-id="${task.id}"]`).forEach((el)=>el.draggable=false);
+  }
 }
 
 function renderView() {
@@ -575,6 +583,7 @@ function dayModal(iso) {
 }
 
 function taskModal(task = {}) {
+  if (task.metadata?.assignment_id) return linkedTaskModal(task);
   const isNew = !task.id;
   const isSecondary = Boolean(task.is_secondary);
   const recurrence = task.recurrence_rule || { frequency: 'none' };
@@ -600,6 +609,11 @@ function taskModal(task = {}) {
     </div>${!isNew ? `<div class="snooze"><p>Recordar más tarde en este dispositivo:</p>${[10, 20, 30, 60].map((minutes) => `<button type="button" class="button small" data-snooze="${minutes}" data-task="${task.id}">${minutes === 60 ? '1 hora' : `${minutes} min`}</button>`).join('')}</div>` : ''}</div>
     <div class="modal-actions">${!isNew ? `<button type="button" class="button" data-duplicate-task="${task.id}">Duplicar</button>` : ''}<button type="button" class="button push-right" data-close-modal>Cancelar</button><button class="button primary" type="submit">Guardar</button></div>
   </form></section></div>`;
+}
+
+function linkedTaskModal(task) {
+  const readonly = task.metadata.read_only;
+  return `<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true" aria-labelledby="linked-title"><form id="linked-task-form"><div class="modal-head"><div><span class="eyebrow">Una tarea · minuta y calendario</span><h2 id="linked-title">Tarea de minuta</h2></div>${!readonly ? deleteButton('task',task.id,task.title) : ''}<button type="button" class="modal-close" data-close-modal aria-label="Cerrar">×</button></div><div class="modal-body"><p class="field-help">${escapeHTML(task.description)}. Los cambios se reflejan también en distribución y en el punto de origen.</p><fieldset ${readonly ? 'disabled' : ''} style="border:0;padding:0;margin:18px 0"><div class="form-grid"><div class="field wide"><label>Título<input name="title" required maxlength="2000" value="${escapeHTML(task.title)}"></label></div><div class="field"><label>Fecha opcional<input name="date" type="date" min="2000-01-01" max="2200-12-31" value="${task.date || ''}"></label><small class="field-help">Vacía: permanece en distribución, sale del calendario.</small></div><div class="field"><label>Prioridad<select name="priority">${['alta','media','baja'].map((p) => `<option value="${p}" ${task.priority===p?'selected':''}>${p}</option>`).join('')}</select></label></div><div class="field"><label>Estado<select name="status">${[['sin_iniciar','Sin iniciar'],['iniciada','Iniciada'],['terminada','Terminada']].map(([k,l]) => `<option value="${k}" ${task.metadata.status===k?'selected':''}>${l}</option>`).join('')}</select></label></div></div></fieldset>${readonly?'<p>Solo consulta: el responsable o creador modifica esta tarea.</p>':''}</div><div class="modal-actions"><button type="button" class="button push-right" data-close-modal>Cerrar</button>${!readonly?'<button class="button primary" type="submit">Guardar tarea de minuta</button>':''}</div></form></section></div>`;
 }
 
 function subtaskInput(subtask = {}) {
@@ -719,6 +733,13 @@ document.addEventListener('submit', (event) => {
   if (event.target.id === 'quick-form') submitQuick(event.target);
   if (event.target.id === 'secondary-form') submitSecondary(event.target);
   if (event.target.id === 'task-form') submitTask(event.target);
+  if (event.target.id === 'linked-task-form') {
+    const task=state.modal.task; const data=Object.fromEntries(new FormData(event.target));
+    withBusy(event.target.querySelector('button[type="submit"]'),async()=>{
+      await saveTask({...data,expected_updated_at:task.updated_at},task.id);
+      state.modal=null; toast('Tarea de minuta actualizada','Se mantiene sincronizada con distribución.'); await refresh({quiet:true});
+    });
+  }
   if (event.target.id === 'birthday-form') submitBirthday(event.target);
   if (event.target.id === 'birthday-edit-form') submitBirthdayEdit(event.target);
   if (event.target.id === 'project-form') submitProject(event.target);
@@ -816,7 +837,8 @@ function submitNotifications(form) {
 }
 
 async function removeTask(id, button) {
-  if (!await confirmDelete('¿Estás seguro de que quieres eliminar esta tarea? Esta acción no se puede deshacer.')) return;
+  const task=state.tasks.find((t)=>t.id===id)||state.history.find((t)=>t.id===id);
+  if (!await confirmDelete(task?.metadata?.assignment_id ? '¿Estás seguro de que quieres eliminar esta tarea? Se quitará del calendario y de distribución. El punto de la minuta se conserva.' : '¿Estás seguro de que quieres eliminar esta tarea? Esta acción no se puede deshacer.')) return;
   await withBusy(button, async () => { await deleteTask(id); state.modal = null; toast('Tarea eliminada'); await refresh({ quiet: true }); });
 }
 
@@ -866,7 +888,7 @@ document.addEventListener('drop', (event) => {
   const target = event.target.closest('[data-drop-date]'); if (!target) return;
   event.preventDefault(); target.classList.remove('dragover');
   const id = event.dataTransfer.getData('text/task-id'); const task = state.tasks.find((item) => item.id === id);
-  if (!task || task.date === target.dataset.dropDate) return;
+  if (!task || task.metadata?.read_only || task.date === target.dataset.dropDate) return;
   withBusy(null, async () => { await patchTask(id, { date: target.dataset.dropDate }); toast('Tarea movida', `Nueva fecha: ${formatLongDate(target.dataset.dropDate)}`); await refresh({ quiet: true }); });
 });
 

@@ -85,6 +85,18 @@ export async function createMilestonePdf(hito, owner = '') {
   for (const [label, value] of [['Para qué se realiza',hito.purpose],['Directrices y criterios',hito.guidelines],['Planificación y pasos a seguir',hito.plan],['Aprendizajes para otros años',hito.learnings]]) {
     section(label); paragraph(value || 'Sin información registrada.');
   }
+  section('Documentos adjuntos de esta edición');
+  for (const file of hito.documents || []) paragraph(`${file.name} (${Math.max(1,Math.ceil(file.size/1024))} KB)`,10);
+  if (!hito.documents?.length) paragraph('Sin archivos adjuntos.');
+  paragraph('Los archivos se descargan desde el hito en la plataforma. Este PDF incluye su listado, no su contenido.',9,regular,colors.muted);
+  if (hito.source_snapshot?.title) {
+    const origin=hito.source_snapshot;
+    section(`Referencia histórica: edición ${origin.year}`);
+    paragraph(origin.title,12,bold);
+    paragraph('Resultados de la edición anterior. No representan el avance de la edición actual.',9,regular,colors.muted);
+    for (const task of origin.tasks || []) paragraph(`${task.completed?'Realizada':'Por realizar'}: ${task.title}${task.notes?`\n${task.notes}`:''}`);
+    paragraph(`Aprendizajes anteriores: ${origin.learnings || 'Sin registrar.'}`);
+  }
   for (const [index,p] of pdf.getPages().entries()) {
     p.drawLine({ start:{ x:margin,y:35 },end:{ x:width-margin,y:35 },thickness:.5,color:colors.line });
     p.drawText(`PDR | Hito ${hito.year || ''} | ${index+1} / ${pdf.getPageCount()}`,{ x:margin,y:21,size:8,font:regular,color:colors.muted });

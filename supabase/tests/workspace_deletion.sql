@@ -3,8 +3,8 @@ do $$
 declare n text; t text; b text; folder jsonb; mid uuid:=gen_random_uuid(); nid uuid:=gen_random_uuid();
  doc jsonb; h jsonb; task_id uuid; payload jsonb; updated jsonb;
 begin
- n=public.pdr_sign_in('nicolas','1234')->>'token';
- t=public.pdr_sign_in('tomas','')->>'token'; b=public.pdr_sign_in('benjamin','1234')->>'token';
+ n=public.pdr_sign_in('nicolas',current_setting('pdr.test_pin',true))->>'token';
+ t=public.pdr_sign_in('tomas','')->>'token'; b=public.pdr_sign_in('benjamin',current_setting('pdr.test_pin',true))->>'token';
  folder=public.pdr_workspace('add_folder',n,'{"name":"__DELETE_TEST__","assignee":"tomas"}');
  payload=jsonb_build_object('id',mid,'title','__DELETE_TEST__','state','published',
   'folders',jsonb_build_array(folder),'notes',jsonb_build_array(jsonb_build_object('id',nid,'folder_id',folder->>'id','text','Preparar evento','actionable',true)));

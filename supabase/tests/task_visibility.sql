@@ -4,7 +4,7 @@ declare n text; b text; t text; s text; mid uuid:=gen_random_uuid(); fid uuid:=g
  ids uuid[]:=array[gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()];
  groups text[]:=array['nicolas','benjamin','tomas','ambos']; notes jsonb:='[]'; folders jsonb:='[]'; doc jsonb; a uuid; i int;
 begin
- n=public.pdr_sign_in('nicolas','1234')->>'token'; b=public.pdr_sign_in('benjamin','1234')->>'token';
+ n=public.pdr_sign_in('nicolas',current_setting('pdr.test_pin',true))->>'token'; b=public.pdr_sign_in('benjamin',current_setting('pdr.test_pin',true))->>'token';
  t=public.pdr_sign_in('tomas','')->>'token'; s=public.pdr_sign_in('ambos','')->>'token';
  for i in 1..4 loop
   fid=gen_random_uuid();
