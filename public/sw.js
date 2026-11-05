@@ -1,4 +1,4 @@
-const CACHE = 'pdr-workspace-scheduled-memory-v8';
+const CACHE = 'pdr-workspace-explicit-document-cleanup-v9';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

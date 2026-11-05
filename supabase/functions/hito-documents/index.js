@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { documentMeta, MAX_FILE_SIZE } from './validation.js';
+import { cleanupDocuments } from './cleanup.js';
 
 // Profile-session authentication is checked by the service-only RPC on every
 // operation. No service key or Storage URL is ever sent to a browser.
@@ -24,11 +25,12 @@ Deno.serve(async (req) => {
     if (error) throw new Error(error.message);
     return data;
   }
-  async function cleanup() {
-    for (const file of await rpc('cleanup')) {
-      const {error}=await bucket.remove([file.storage_path]);
-      if (!error) await rpc('purge',{file_id:file.id});
-    }
+  async function cleanup(fileIds) {
+    return cleanupDocuments(fileIds,{
+      query:(payload)=>rpc('cleanup',payload),
+      remove:(paths)=>bucket.remove(paths),
+      purge:(payload)=>rpc('purge',payload),
+    });
   }
   try {
     const multipart=req.headers.get('content-type')?.includes('multipart/form-data');
@@ -36,17 +38,17 @@ Deno.serve(async (req) => {
     const field=(key)=>multipart?body.get(key):body[key];
     token=String(field('token')||'');
     if (!/^[a-f0-9]{64}$/.test(token)) return json({error:'Sesión inválida.'},401);
-    // Even cleanup authenticates the session, before any storage operation.
-    await cleanup();
     const action=field('action');
-    if (action==='cleanup') return json({ok:true});
+    // No automatic cleanup during upload, download or copy. Every cleanup
+    // authenticates the profile and is bounded by an explicit list of IDs.
+    if (action==='cleanup') return json(await cleanup(field('file_ids')));
     if (action==='upload') {
       const file=field('file');
       if (!(file instanceof File)) throw new Error('Selecciona un archivo.');
       const meta=documentMeta(file.name,file.size);
       const saved=await rpc('reserve',{...meta,milestone_id:field('milestone_id')});
       const {error}=await bucket.upload(saved.storage_path,file,{contentType:meta.mime,upsert:false});
-      if (error) { await rpc('remove',{file_id:saved.id}); await cleanup(); throw new Error('No se pudo subir el archivo. Intenta nuevamente.'); }
+      if (error) { await rpc('remove',{file_id:saved.id}); await cleanup([saved.id]); throw new Error('No se pudo subir el archivo. Intenta nuevamente.'); }
       await rpc('ready',{file_id:saved.id});
       return json({ok:true});
     }
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
       return new Response(data,{headers:{...headers,'Content-Type':file.mime,
         'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`}});
     }
-    if (action==='remove') { await rpc('remove',{file_id:file.id}); await cleanup(); return json({ok:true}); }
+    if (action==='remove') { await rpc('remove',{file_id:file.id}); await cleanup([file.id]); return json({ok:true}); }
     if (action==='copy') {
       if (!file.ready) throw new Error('El archivo de origen no está disponible.');
       const meta=documentMeta(file.name,file.size);
@@ -66,7 +68,7 @@ Deno.serve(async (req) => {
       try { saved=await rpc('reserve',{...meta,milestone_id:field('milestone_id'),source_file_id:file.id}); }
       catch(error) { if(error.message.includes('milestone_files_copy_idx')) throw new Error('Ya existe una copia o está en proceso. Recarga el hito antes de reintentar.'); throw error; }
       const {error}=await bucket.copy(file.storage_path,saved.storage_path);
-      if(error) { await rpc('remove',{file_id:saved.id}); await cleanup(); throw new Error('No se pudo copiar un documento. Puedes reintentar desde la edición.'); }
+      if(error) { await rpc('remove',{file_id:saved.id}); await cleanup([saved.id]); throw new Error('No se pudo copiar un documento. Puedes reintentar desde la edición.'); }
       await rpc('ready',{file_id:saved.id});
       return json({ok:true});
     }

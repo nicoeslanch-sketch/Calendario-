@@ -65,6 +65,8 @@ El despliegue de producción se realiza con la integración GitHub → Vercel al
 
 ## Fechas e historial reutilizable
 
+La limpieza de adjuntos exige siempre IDs explícitos, tanto en la función de archivos como en el RPC de base de datos. No se ejecutan barridos automáticos al subir, descargar o copiar archivos. Eliminar un hito envía solo los IDs de sus propios documentos; retirar un archivo o recuperar una subida/copia fallida limpia únicamente ese archivo. `20261105151334_require_explicit_document_cleanup_ids.sql`, `supabase/tests/document_cleanup.sql` y `tests/document-cleanup.test.js` verifican la restricción, los permisos y la protección de documentos no seleccionados.
+
 Las pruebas SQL leen la contraseña de `current_setting('pdr.test_pin',true)`. Configúrala dentro de la misma transacción de prueba, sin guardarla en el repositorio ni imprimir tokens. Los archivos de pruebas no contienen contraseñas de los perfiles.
 
 La migración `20261104191755_scheduled_minutes_reusable_milestones.sql` incorpora las fechas de asignaciones, proyección de calendario, historial de ediciones y metadatos de adjuntos privados. `supabase/tests/scheduled_minutes.sql` cubre fecha heredada, propia y ausente, borradores, sincronización en ambos sentidos, permisos, versiones y eliminación. `supabase/tests/hito_memory.sql` verifica copia independiente, instantánea histórica validada por servidor, privacidad de metadatos y cola de limpieza. Ambos revierten sus datos de prueba.

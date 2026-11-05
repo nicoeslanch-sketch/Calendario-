@@ -1,4 +1,11 @@
 export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+export function requiredCleanupIds(value) {
+  if (!Array.isArray(value) || value.length<1 || value.length>100
+    || value.some((id)=>typeof id!=='string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))) {
+    throw new Error('La limpieza requiere entre 1 y 100 IDs de archivos explícitos y válidos.');
+  }
+  return [...new Set(value.map((id)=>id.toLowerCase()))];
+}
 export const TYPES = { pdf:'application/pdf', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   txt:'text/plain', csv:'text/csv', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg' };

@@ -533,7 +533,8 @@ async function deleteRecord(kind, id) {
   try {
     if (!isDraft) {
       await request({ minute: 'delete_minute', milestone: 'delete_milestone', folder: 'delete_folder', assignment: 'delete_assignment' }[kind], { id, version: record.version });
-      if (kind==='milestone') await milestoneFile('cleanup').catch(()=>toast('Hito eliminado. La limpieza de archivos se reintentará en la próxima operación.'));
+      const file_ids=(record.documents || []).map((f)=>f.id);
+      if (kind==='milestone' && file_ids.length) await milestoneFile('cleanup',{file_ids}).catch(()=>toast('Hito eliminado. Quedó pendiente retirar sus adjuntos del almacenamiento.'));
     }
     if (kind === 'minute') {
       const draft = sessionStorage.getItem(`pdr-draft-${state.profile}`);
